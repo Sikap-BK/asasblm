@@ -308,7 +308,9 @@ Pages.tampilan = {
       <div class="g g2">
         <div class="card"><div class="ch"><h3>Warna & Tema Aplikasi</h3><span class="grow"></span><button class="btn sm" data-act="clrReset">${ic('refresh')} Warna Bawaan</button><p>Pilih palet siap pakai atau tentukan warna sendiri. Perubahan langsung terlihat di seluruh aplikasi.</p></div>
           <div class="pal">${PALET.map(p => `<button class="${p[1] === w1 && p[2] === w2 ? 'on' : ''}" data-act="clrPal" data-a="${p[1]}" data-b="${p[2]}"><span><i style="background:${p[1]}"></i><i style="background:${p[2]}"></i></span>${p[0]}<small>${p[1]} · ${p[2]}</small></button>`).join('')}</div>
-          <div class="f2" style="margin-top:18px"><label class="fld"><span>Warna Utama</span><span class="clr"><input type="color" name="warna1" value="${w1}" data-on="clrLive" data-ch="clrSave" aria-label="Warna utama"><span class="mono" id="clr-1">${w1}</span></span><small>Tombol utama, menu aktif, fokus.</small></label>
+          <div class="fld" style="margin-top:18px"><span>Mode tampilan <small style="display:inline;margin:0">(berlaku di perangkat ini)</small></span>
+            <span class="seg">${[['light', 'sun', 'Terang'], ['dark', 'moon', 'Gelap'], ['auto', 'layout', 'Ikuti sistem']].map(m => `<button class="${Mode.pref() === m[0] ? 'on' : ''}" data-act="modeSet" data-v="${m[0]}" style="display:inline-flex;align-items:center;gap:6px">${ic(m[1]).replace('class="ic"', 'class="ic" style="width:16px;height:16px"')}${m[2]}</button>`).join('')}</span></div>
+          <div class="f2"><label class="fld"><span>Warna Utama</span><span class="clr"><input type="color" name="warna1" value="${w1}" data-on="clrLive" data-ch="clrSave" aria-label="Warna utama"><span class="mono" id="clr-1">${w1}</span></span><small>Menu samping, tombol utama, fokus.</small></label>
             <label class="fld"><span>Warna Sekunder</span><span class="clr"><input type="color" name="warna2" value="${w2}" data-on="clrLive" data-ch="clrSave" aria-label="Warna sekunder"><span class="mono" id="clr-2">${w2}</span></span><small>Aksen dan ujung gradien tombol login.</small></label></div>
           <div class="row" style="padding:14px;border-radius:8px;background:var(--bg)"><button class="btn pri">${ic('save')} Tombol Utama</button>
             <button class="btn" style="border:0;color:#fff;border-radius:99px;background:linear-gradient(90deg,var(--p),var(--s))">Masuk</button><span class="chip">Menu aktif</span><span class="bdg se">Aksen</span></div>
@@ -344,6 +346,7 @@ Pages.tampilan = {
   }
 };
 const simpanWarna = (a, b) => { applyTheme(a, b); Data.set({ warna1: a, warna2: b }); };
+Act.modeSet = t => { Mode.set(t.dataset.v); rerender(); };
 Act.clrPal = t => { simpanWarna(t.dataset.a, t.dataset.b); rerender(); };
 Act.clrReset = () => { simpanWarna(PALET[0][1], PALET[0][2]); rerender(); toast('Warna dikembalikan ke bawaan.'); };
 On.clrLive = t => { const a = $('[name=warna1]').value, b = $('[name=warna2]').value; applyTheme(a, b); $('#clr-1').textContent = a.toUpperCase(); $('#clr-2').textContent = b.toUpperCase(); };

@@ -71,8 +71,11 @@ const ICONS = {
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
   book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
   shuffle: '<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
-  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
-  eyeOff: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/>',
+  eye: '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49M14.08 14.16a3 3 0 0 1-4.24-4.24M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14M2 2l20 20"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>',
+  grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
   layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>'
 };
 const ic = n => '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
@@ -89,7 +92,7 @@ const saveDBSoon = debounce(() => { if (!Store.set('db', DB)) console.warn('Cach
 let _ix = { rev: -1 };
 /** Indeks cepat (dibangun ulang hanya bila data berubah). */
 function IX() {
-  if (_ix.rev !== S.rev) _ix = { rev: S.rev, pes: new Map(DB.peserta.map(p => [p.nisn, p])), ruang: new Map(DB.ruang.map(r => [r.id, r])), sis: new Map(DB.siswa.map(s => [s.nisn, s])) };
+  if (_ix.rev !== S.rev) _ix = { rev: S.rev, pes: new Map(DB.peserta.map(p => [p.nisn, p])), ruang: new Map(DB.ruang.map(r => [r.id, r])), rIdx: new Map(DB.ruang.map((r, i) => [r.id, i])), sis: new Map(DB.siswa.map(s => [s.nisn, s])) };
   return _ix;
 }
 /** Nama sekolah: dari pengaturan; bila kosong, diambil langsung dari baris kop surat. */
@@ -107,7 +110,9 @@ function blobUrl(dataUrl) {
   _blob.set(dataUrl, url); return url;
 }
 const daftarKelas = () => [...new Set(DB.siswa.map(s => s.kelas).filter(Boolean))].sort(cmpKelas);
-const ruangUrut = () => DB.ruang.slice().sort((a, b) => nat(a.nama, b.nama));
+/** Urutan ruang = urutan dibuat (dan hasil seret-lepas), bukan urut abjad. */
+const ruangUrut = () => DB.ruang.slice();
+const idxRuang = id => { const i = IX().rIdx.get(id); return i == null ? 1e9 : i; };
 
 // ---------- pengukur ----------
 const Perf = {
@@ -233,11 +238,25 @@ function applyBoot(boot) {
 }
 
 // ---------- tema, data publik login ----------
+const _tema = { a: '#4F46E5', b: '#0EA5A4' };
 function applyTheme(w1, w2) {
   const r = document.documentElement;
-  r.style.setProperty('--p', /^#[0-9a-f]{6}$/i.test(w1 || '') ? w1 : '#4F46E5');
-  r.style.setProperty('--s', /^#[0-9a-f]{6}$/i.test(w2 || '') ? w2 : '#0EA5A4');
+  _tema.a = /^#[0-9a-f]{6}$/i.test(w1 || '') ? w1 : '#4F46E5'; _tema.b = /^#[0-9a-f]{6}$/i.test(w2 || '') ? w2 : '#0EA5A4';
+  r.style.setProperty('--p', _tema.a); r.style.setProperty('--s', _tema.b);
+  window.asasTone(_tema.a);
+  const m = $('meta[name=theme-color]'); if (m) m.content = getComputedStyle(r).getPropertyValue('--side-bg').trim() || _tema.a;
 }
+/* ---------- mode gelap / terang (per perangkat) ---------- */
+const Mode = {
+  pref: () => Store.get('mode', 'light'),
+  apply() {
+    document.documentElement.setAttribute('data-theme', window.asasMode());
+    applyTheme(_tema.a, _tema.b);
+    const b = $('#mode-btn'), gelap = window.asasMode() === 'dark';
+    if (b) { b.innerHTML = ic(gelap ? 'sun' : 'moon'); b.title = b.ariaLabel = gelap ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'; }
+  },
+  set(m) { Store.set('mode', m); this.apply(); }
+};
 function syncPub() {
   const pub = Object.assign(Store.get('pub', {}), { namaSekolah: namaSekolah(), warna1: DB.set.warna1 || '', warna2: DB.set.warna2 || '', logo1: DB.assets.logo1 || '', bgVer: DB.set.bgVer || '' });
   // latar login yang baru diunggah dari perangkat ini: samakan versinya dengan versi server
@@ -312,6 +331,7 @@ function paintShell() {
   $('#ta').textContent = 'T.A. ' + (s.tahunAjaran || '—') + ' ' + (s.semester || '');
   $('#top-user').textContent = S.user || 'Admin';
   $('#demo-bar').hidden = !DEMO;
+  Mode.apply();
   paintSync();
 }
 function enterApp() {
@@ -339,6 +359,8 @@ addEventListener('hashchange', route);
 Act.bukaMenu = () => document.documentElement.classList.add('menu-open');
 Act.tutupMenu = () => document.documentElement.classList.remove('menu-open');
 Act.keluar = logout;
+Act.mode = () => { Mode.set(window.asasMode() === 'dark' ? 'light' : 'dark'); if (S.page === 'tampilan') rerender(); };
+if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (Mode.pref() === 'auto') { Mode.apply(); if (S.page === 'tampilan') rerender(); } });
 
 document.addEventListener('click', e => { const t = e.target.closest('[data-act]'); if (t && Act[t.dataset.act]) Act[t.dataset.act](t, e); });
 document.addEventListener('input', e => { const t = e.target.closest('[data-on]'); if (t && On[t.dataset.on]) On[t.dataset.on](t, e); });
@@ -453,7 +475,8 @@ addEventListener('afterprint', () => { $('#print-root').innerHTML = ''; });
 async function init() {
   $('#lg-form').addEventListener('submit', submitLogin);
   const mata = $('#lg-eye'); mata.innerHTML = ic('eye');
-  mata.addEventListener('click', () => { const p = $('#lg-p'), buka = p.type === 'password'; p.type = buka ? 'text' : 'password'; mata.innerHTML = ic(buka ? 'eyeOff' : 'eye'); mata.setAttribute('aria-label', buka ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'); p.focus(); });
+  mata.title = 'Tampilkan kata sandi';
+  mata.addEventListener('click', () => { const p = $('#lg-p'), buka = p.type === 'password'; p.type = buka ? 'text' : 'password'; mata.innerHTML = ic(buka ? 'eyeOff' : 'eye'); mata.title = buka ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'; mata.setAttribute('aria-label', mata.title); mata.setAttribute('aria-pressed', buka); });
   if (DEMO) await loadScript('js/demo.js');
   const ses = Store.get('ses'), db = Store.get('db');
   S.q = Store.get('q', []);

@@ -41,7 +41,7 @@ Pages.dashboard = {
         ${kpi('Foto Siswa', nFoto, 'camera', 's', nS ? `${Math.round(nFoto / nS * 100)}% dari seluruh siswa` : 'Belum ada siswa')}
       </div>
       <div class="g g-21 mt">
-        <div class="card"><div class="ch"><h3>Langkah Persiapan</h3><span class="chip chip-ok">${done} dari ${steps.length} selesai</span><span class="grow"></span><b style="color:var(--p)">${Math.round(done / steps.length * 100)}%</b>
+        <div class="card"><div class="ch"><h3>Langkah Persiapan</h3><span class="chip chip-ok">${done} dari ${steps.length} selesai</span><span class="grow"></span><b style="color:var(--p-tx)">${Math.round(done / steps.length * 100)}%</b>
           <p>Selesaikan seluruh tahapan sebelum mencetak kartu, daftar hadir, dan berita acara.</p></div>
           <div class="bar" style="margin-bottom:14px"><i style="width:${done / steps.length * 100}%"></i></div>
           ${steps.map((x, i) => `<a class="step ${x[3] ? 'done' : i === now ? 'now' : ''}" href="#/${x[0]}"><span class="sn">${ic(x[3] ? 'check' : i === now ? 'edit' : 'clock')}</span><span><b>${x[1]}</b><small>${esc(x[2])}</small></span>
@@ -280,8 +280,9 @@ Pages.ruang = {
       <div class="g g-12">
         <div class="card flush"><div class="tools"><h3 style="font-size:16px">Daftar Ruang</h3><span class="chip plain">${rooms.length} ruang · ${kap} kursi</span><span class="grow"></span>
             <button class="btn sm" data-act="rgBanyak">${ic('layout')} Buat Banyak</button><button class="btn sm pri" data-act="rgTambah">${ic('plus')} Tambah</button></div>
-          ${rooms.length ? `<div class="tw" style="max-height:330px;overflow:auto"><table class="tbl"><thead><tr><th>Nama Ruang</th><th class="r">Kapasitas</th><th class="r">Terisi</th><th class="r">Aksi</th></tr></thead><tbody>
-            ${rooms.map(r => `<tr><td><b>${esc(r.nama)}</b></td><td class="r">${esc(r.kapasitas)}</td><td class="r">${isi.get(r.id) || 0}</td>
+          ${rooms.length > 1 ? `<p class="mu" style="font-size:12px;padding:0 20px 10px;margin-top:-6px">Seret ${ic('grip').replace('class="ic"', 'class="ic" style="width:14px;height:14px;vertical-align:-2px"')} untuk mengubah urutan ruang.</p>` : ''}
+          ${rooms.length ? `<div class="tw" id="rg-box" style="max-height:330px;overflow:auto"><table class="tbl"><thead><tr><th style="width:52px;padding-right:0">No</th><th>Nama Ruang</th><th class="r">Kapasitas</th><th class="r">Terisi</th><th class="r">Aksi</th></tr></thead><tbody>
+            ${rooms.map((r, i) => `<tr data-id="${r.id}"><td class="nw" style="padding-right:0"><button class="drag-h" data-i="${i}" aria-label="Urutan ${i + 1}: ${esc(r.nama)}. Seret, atau tekan panah atas/bawah untuk memindah." title="Seret untuk memindah urutan">${ic('grip')}</button><span class="mu" style="font-size:12px">${i + 1}</span></td><td><b>${esc(r.nama)}</b></td><td class="r">${esc(r.kapasitas)}</td><td class="r">${isi.get(r.id) || 0}</td>
               <td class="r nw"><button class="ib" data-act="rgEdit" data-id="${r.id}" aria-label="Ubah">${ic('edit')}</button><button class="ib dan" data-act="rgHapus" data-id="${r.id}" aria-label="Hapus">${ic('trash')}</button></td></tr>`).join('')}</tbody></table></div>`
             : emptyBox('Belum ada ruang', 'Klik Buat Banyak untuk membuat beberapa ruang sekaligus.')}
         </div>
@@ -300,7 +301,7 @@ Pages.ruang = {
           <select class="in" data-ch="pesFilter" aria-label="Filter ruang">${opts(rooms.map(r => [r.id, r.nama]), St.ruang.fr, 'Semua Ruang')}</select></div>
         <div id="pes-tbl"></div>
       </div>`;
-    pesertaTbl();
+    pesertaTbl(); rgDnD(el);
   }
 };
 function pesertaTbl() {
@@ -342,6 +343,45 @@ Act.rgBanyak = () => modal({
     Data.bulk('ruang', rows); rerender(); toast(rows.length + ' ruang dibuat.', 'ok');
   }
 });
+/* ---------- urutan ruang: seret-lepas (mouse & sentuh) + panah keyboard ---------- */
+function simpanUrutRuang(ids, fokusId) {
+  if (ids.join() === DB.ruang.map(r => r.id).join()) return false;
+  const by = new Map(DB.ruang.map(r => [r.id, r]));
+  Data.replace('ruang', ids.map(i => by.get(i)).filter(Boolean)); rerender();
+  if (fokusId) { const h = $(`#rg-box tr[data-id="${fokusId}"] .drag-h`); if (h) h.focus(); }
+  return true;
+}
+function rgDnD(el) {
+  const box = $('#rg-box', el); if (!box) return;
+  const tb = $('tbody', box);
+  tb.onpointerdown = e => {
+    const h = e.target.closest('.drag-h'); if (!h || e.button > 0) return;
+    e.preventDefault();
+    const row = h.closest('tr'); let gulir = 0, selesai = false;
+    row.classList.add('dragging'); document.body.classList.add('is-dragging');
+    const mv = ev => {
+      const y = ev.clientY; let sebelum = null;
+      for (const r of tb.children) { if (r === row) continue; const b = r.getBoundingClientRect(); if (y < b.top + b.height / 2) { sebelum = r; break; } }
+      if (sebelum !== row.nextSibling) tb.insertBefore(row, sebelum);
+      const bb = box.getBoundingClientRect(); gulir = y < bb.top + 36 ? -8 : y > bb.bottom - 36 ? 8 : 0;
+    };
+    const tick = setInterval(() => { if (gulir) box.scrollTop += gulir; }, 16);
+    const up = () => {
+      if (selesai) return; selesai = true;
+      removeEventListener('pointermove', mv); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); clearInterval(tick);
+      row.classList.remove('dragging'); document.body.classList.remove('is-dragging');
+      if (simpanUrutRuang([...tb.children].map(r => r.dataset.id))) toast('Urutan ruang disimpan.', 'ok');
+    };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  };
+  tb.onkeydown = e => {
+    const h = e.target.closest('.drag-h'); if (!h || !/^Arrow(Up|Down)$/.test(e.key)) return;
+    e.preventDefault();
+    const ids = DB.ruang.map(r => r.id), i = +h.dataset.i, j = i + (e.key === 'ArrowUp' ? -1 : 1);
+    if (j < 0 || j >= ids.length) return;
+    [ids[i], ids[j]] = [ids[j], ids[i]]; simpanUrutRuang(ids, ids[j]);
+  };
+}
 Act.rgBagi = () => DB.peserta.length ? confirmBox('Pembagian ruang dan semua nomor ujian yang ada akan dibuat ulang dari awal.', () => bagiPeserta(false), 'Bagi ulang') : bagiPeserta(false);
 Act.rgSisa = () => bagiPeserta(true);
 
@@ -383,7 +423,7 @@ Act.krTerapkan = () => {
   });
   if (St.krNomor) {                                                 // nomor ujian berurutan per ruang → kelas → nama
     const nm = id => (ix.ruang.get(id) || {}).nama || '', sis = n => ix.sis.get(n) || { kelas: '', nama: '' };
-    pes.sort((a, b) => nat(nm(a.idRuang), nm(b.idRuang)) || cmpKelas(sis(a.nisn).kelas, sis(b.nisn).kelas) || nat(sis(a.nisn).nama, sis(b.nisn).nama)).forEach((p, i) => p.noUjian = buatNo(i + 1));
+    pes.sort((a, b) => idxRuang(a.idRuang) - idxRuang(b.idRuang) || cmpKelas(sis(a.nisn).kelas, sis(b.nisn).kelas) || nat(sis(a.nisn).nama, sis(b.nisn).nama)).forEach((p, i) => p.noUjian = buatNo(i + 1));
   }
   Data.set({ fmtNo: Object.assign({}, St.fmt) }); Data.replace('peserta', urutkanUlang(pes)); St.kr = {}; rerender();
   const isi = new Map(); pes.forEach(p => isi.set(p.idRuang, (isi.get(p.idRuang) || 0) + 1));
@@ -406,7 +446,7 @@ Pages.sesi = {
     sesiTbl();
   }
 };
-function sesiUrut(list) { const ix = IX(); const nm = x => (ix.ruang.get(x.idRuang) || {}).nama || ''; return list.slice().sort((a, b) => (a.tanggal + a.jam).localeCompare(b.tanggal + b.jam) || nat(a.mapel, b.mapel) || nat(nm(a), nm(b))); }
+function sesiUrut(list) { return list.slice().sort((a, b) => (a.tanggal + a.jam).localeCompare(b.tanggal + b.jam) || nat(a.mapel, b.mapel) || idxRuang(a.idRuang) - idxRuang(b.idRuang)); }
 function sesiTbl() {
   const el = $('#ses-tbl'); if (!el) return;
   const f = St.sesi, q = f.q.trim().toLowerCase(), ix = IX();

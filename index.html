@@ -21,13 +21,30 @@
 <link rel="stylesheet" href="css/style.css">
 <script>
 /* Sebelum gambar pertama: pasang warna tema & tentukan layar (login / aplikasi) dari cache perangkat → tanpa kedip. */
+/* Mode gelap/terang disimpan per perangkat: 'light' | 'dark' | 'auto' (ikuti sistem). */
+window.asasMode = function () {
+  var m = 'light'; try { m = JSON.parse(localStorage.getItem('asas:v1:mode')) || 'light'; } catch (e) { }
+  return m === 'dark' || (m === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+};
+/* Warna menu samping mengikuti warna tema; tulisan otomatis putih atau gelap agar selalu terbaca. */
+window.asasTone = function (p) {
+  var r = document.documentElement, gelap = r.getAttribute('data-theme') === 'dark';
+  var n = parseInt((/^#[0-9a-f]{6}$/i.test(p || '') ? p : '#4F46E5').slice(1), 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255];
+  if (gelap) c = c.map(function (v, i) { return Math.round(v * .5 + [11, 18, 32][i] * .5); });
+  var L = c.map(function (v) { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); });
+  L = .2126 * L[0] + .7152 * L[1] + .0722 * L[2];
+  r.style.setProperty('--side-bg', 'rgb(' + c.join(',') + ')');
+  r.style.setProperty('--side-rgb', 1.05 / (L + .05) >= 3 ? '255,255,255' : '15,23,42');
+};
 (function () {
   try {
     var g = function (k) { var v = localStorage.getItem('asas:v1:' + k); return v ? JSON.parse(v) : null; };
     var pub = g('pub') || {}, ses = g('ses');
     var r = document.documentElement;
+    r.setAttribute('data-theme', asasMode());
     if (pub.warna1) r.style.setProperty('--p', pub.warna1);
     if (pub.warna2) r.style.setProperty('--s', pub.warna2);
+    asasTone(pub.warna1);
     r.className = (ses && ses.exp > Date.now() && localStorage.getItem('asas:v1:db')) ? 'is-app' : 'is-login';
   } catch (e) { document.documentElement.className = 'is-login'; }
 })();
@@ -77,6 +94,7 @@
       <div id="crumb"></div>
       <span class="grow"></span>
       <span id="sync" class="chip"></span>
+      <button class="ib" id="mode-btn" data-act="mode"></button>
       <span id="ta" class="chip chip-ok hide-m"></span>
       <span class="top-user hide-m"><span class="ava-u"></span><span><b id="top-user">Admin</b><small>Administrator</small></span></span>
     </header>
