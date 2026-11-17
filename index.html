@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASAS — Administrasi Sumatif Akhir Semester</title>
+<meta name="description" content="Aplikasi pembuat Kartu Sumatif, Daftar Hadir, dan Berita Acara sumatif akhir semester.">
+<meta name="theme-color" content="#4F46E5">
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234F46E5'/%3E%3Cpath d='M9 22V10h3v12zm6 0v-7h3v7zm6 0v-4h3v4z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://script.google.com">
+<link rel="preconnect" href="https://script.googleusercontent.com">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<script>
+/* Sebelum gambar pertama: pasang warna tema & tentukan layar (login / aplikasi) dari cache perangkat → tanpa kedip. */
+(function () {
+  try {
+    var g = function (k) { var v = localStorage.getItem('asas:v1:' + k); return v ? JSON.parse(v) : null; };
+    var pub = g('pub') || {}, ses = g('ses');
+    var r = document.documentElement;
+    if (pub.warna1) r.style.setProperty('--p', pub.warna1);
+    if (pub.warna2) r.style.setProperty('--s', pub.warna2);
+    r.className = (ses && ses.exp > Date.now() && localStorage.getItem('asas:v1:db')) ? 'is-app' : 'is-login';
+  } catch (e) { document.documentElement.className = 'is-login'; }
+})();
+</script>
+</head>
+<body>
+
+<!-- ================= HALAMAN LOGIN ================= -->
+<div id="login">
+  <div class="lg-shape lg-s1"></div><div class="lg-shape lg-s2"></div><div class="lg-shape lg-s3"></div><div class="lg-shape lg-s4"></div>
+  <header class="lg-brand">
+    <span id="lg-logo" class="lg-logo"></span>
+    <span><b>ASAS</b><small id="lg-brand-sub">Administrasi Sumatif Akhir Semester</small></span>
+  </header>
+  <main class="lg-main">
+    <section class="lg-left">
+      <h1>Selamat<br>Datang!</h1>
+      <span class="lg-bar"></span>
+      <h2 id="lg-sekolah"></h2>
+      <p>Portal Administrasi Sumatif Akhir Semester. Silakan masuk menggunakan akun admin.</p>
+    </section>
+    <form id="lg-form" class="lg-card" autocomplete="on">
+      <h3>Masuk</h3><span class="lg-bar sm"></span>
+      <label for="lg-u">Nama Pengguna</label>
+      <input id="lg-u" name="username" autocomplete="username" required>
+      <label for="lg-p">Kata Sandi</label>
+      <input id="lg-p" name="password" type="password" autocomplete="current-password" required>
+      <div id="lg-err" class="lg-err" role="alert"></div>
+      <button id="lg-btn" type="submit">Masuk</button>
+    </form>
+  </main>
+</div>
+
+<!-- ================= APLIKASI ================= -->
+<div id="app">
+  <aside id="side">
+    <div class="sd-brand"><span id="sd-logo" class="sd-logo"></span><span><b id="sd-nama">ASAS</b><small>PORTAL ASAS</small></span></div>
+    <nav id="nav"></nav>
+    <button class="sd-out" data-act="keluar"></button>
+  </aside>
+  <div id="side-bg" data-act="tutupMenu"></div>
+  <div id="main">
+    <header id="top">
+      <button class="ib only-m" data-act="bukaMenu" aria-label="Menu"></button>
+      <div id="crumb"></div>
+      <span class="grow"></span>
+      <span id="sync" class="chip"></span>
+      <span id="ta" class="chip chip-ok hide-m"></span>
+      <span class="top-user hide-m"><span class="ava-u"></span><span><b id="top-user">Admin</b><small>Administrator</small></span></span>
+    </header>
+    <div id="demo-bar" hidden>MODE DEMO — backend belum disambungkan. Data hanya tersimpan di perangkat ini. Isi <code>js/config.js</code> dengan URL /exec untuk memakai Google Sheets.</div>
+    <div id="pages"></div>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="print-root"></div>
+
+<script defer src="js/config.js"></script>
+<script defer src="js/core.js"></script>
+<script defer src="js/pages.js"></script>
+<script defer src="js/design.js"></script>
+<script defer src="js/cetak.js"></script>
+</body>
+</html>
