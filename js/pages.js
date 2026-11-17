@@ -32,7 +32,7 @@ Pages.dashboard = {
     const kpi = (label, val, icon, cls, foot) => `<div class="card"><div class="kpi"><div><small>${label}</small><b>${val}</b></div><span class="ki ${cls}">${ic(icon)}</span></div><div class="kpi-f">${foot}</div></div>`;
     el.innerHTML = `
       <div class="ph"><div><h1>Selamat datang, ${esc(S.user || 'Admin')}</h1>
-        <p>${esc(s.namaSekolah || 'ASAS')} — kelola persiapan Sumatif Akhir Semester ${esc(s.semester || '')} Tahun Ajaran ${esc(s.tahunAjaran || '—')}.</p></div>
+        <p>${esc(namaSekolah() || 'ASAS')} — kelola persiapan Sumatif Akhir Semester ${esc(s.semester || '')} Tahun Ajaran ${esc(s.tahunAjaran || '—')}.</p></div>
         <div class="acts"><span class="btn" style="cursor:default">${ic('calendar')} ${fTgl(hariIni, true)}</span></div></div>
       <div class="g g4">
         ${kpi('Total Siswa', nS, 'users', '', `Terdaftar di ${daftarKelas().length} kelas`)}
@@ -362,12 +362,12 @@ function sesiUrut(list) { const ix = IX(); const nm = x => (ix.ruang.get(x.idRua
 function sesiTbl() {
   const el = $('#ses-tbl'); if (!el) return;
   const f = St.sesi, q = f.q.trim().toLowerCase(), ix = IX();
-  const rows = sesiUrut(DB.sesi.filter(x => (!f.tgl || x.tanggal === f.tgl) && (!q || (x.mapel + ' ' + x.pengawas).toLowerCase().includes(q))));
+  const rows = sesiUrut(DB.sesi.filter(x => (!f.tgl || x.tanggal === f.tgl) && (!q || (x.mapel + ' ' + x.pengawas + ' ' + (x.pengawas2 || '')).toLowerCase().includes(q))));
   if (!DB.sesi.length) { el.innerHTML = emptyBox('Belum ada jadwal sesi', 'Klik Tambah Sesi — satu sesi bisa langsung dibuat untuk semua ruang.'); return; }
   f.page = clamp(f.page, 1, Math.max(1, Math.ceil(rows.length / PER)));
   el.innerHTML = `<div class="tw"><table class="tbl"><thead><tr><th>Hari / Tanggal</th><th>Mata Pelajaran</th><th>Jam</th><th>Ruang</th><th>Pengawas</th><th class="c">Hadir / Tidak</th><th class="r">Aksi</th></tr></thead><tbody>
     ${rows.slice((f.page - 1) * PER, f.page * PER).map(x => `<tr><td class="nw">${fTgl(x.tanggal, true)}</td><td><b>${esc(x.mapel)}</b></td><td class="nw">${esc(x.jam)}</td><td>${esc((ix.ruang.get(x.idRuang) || {}).nama || '—')}</td>
-      <td>${x.pengawas ? esc(x.pengawas) : '<span class="mu">Belum diisi</span>'}</td><td class="c">${x.hadir !== '' || x.tidakHadir !== '' ? esc(x.hadir || 0) + ' / ' + esc(x.tidakHadir || 0) : '<span class="mu">—</span>'}</td>
+      <td>${x.pengawas || x.pengawas2 ? esc([x.pengawas, x.pengawas2].filter(Boolean).join(' & ')) : '<span class="mu">Belum diisi</span>'}</td><td class="c">${x.hadir !== '' || x.tidakHadir !== '' ? esc(x.hadir || 0) + ' / ' + esc(x.tidakHadir || 0) : '<span class="mu">—</span>'}</td>
       <td class="r nw"><button class="ib" data-act="sesEdit" data-id="${x.id}" aria-label="Ubah">${ic('edit')}</button><button class="ib dan" data-act="sesHapus" data-id="${x.id}" aria-label="Hapus">${ic('trash')}</button></td></tr>`).join('')
     || '<tr><td colspan="7">' + emptyBox('Tidak ada yang cocok') + '</td></tr>'}</tbody></table></div>${pager(rows.length, f.page, PER, 'sesPage')}`;
 }
@@ -377,21 +377,21 @@ Act.sesPage = t => { St.sesi.page = +t.dataset.p; sesiTbl(); };
 function formSesi(x) {
   const baru = !x, rooms = ruangUrut();
   if (!rooms.length) { toast('Buat ruang terlebih dahulu di menu Ruang & No Ujian.', 'er'); return; }
-  x = x || { id: uid(), tanggal: St.sesi.tgl || isoHariIni(), mapel: '', jam: '07.30 - 09.30', idRuang: '*', pengawas: '', hadir: '', tidakHadir: '', catatan: '' };
+  x = x || { id: uid(), tanggal: St.sesi.tgl || isoHariIni(), mapel: '', jam: '07.30 - 09.30', idRuang: '*', pengawas: '', pengawas2: '', hadir: '', tidakHadir: '', catatan: '' };
   const [m1, m2] = (x.jam.match(/\d{1,2}[.:]\d{2}/g) || ['07.30', '09.30']).map(s => s.replace('.', ':').padStart(5, '0'));
   modal({
     title: baru ? 'Tambah Sesi' : 'Ubah Sesi',
     body: `<div class="f2">${fld('Tanggal', 'tanggal', x.tanggal, 'required', 'date')}${fld('Mata Pelajaran', 'mapel', x.mapel, 'required maxlength="60" list="dl-mapel"')}</div><datalist id="dl-mapel">${[...new Set(DB.sesi.map(s => s.mapel))].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
       <div class="f2">${fld('Jam mulai', 'mulai', m1, 'required', 'time')}${fld('Jam selesai', 'selesai', m2, 'required', 'time')}</div>
       ${sel('Ruang', 'idRuang', (baru ? [['*', 'Semua ruang (' + rooms.length + ')']] : []).concat(rooms.map(r => [r.id, r.nama])), x.idRuang)}
-      ${fld('Pengawas', 'pengawas', x.pengawas, 'maxlength="60"', 'text', baru ? 'Untuk "Semua ruang", pengawas diisi nanti per ruang.' : '')}
+      <div class="f2">${fld('Pengawas 1', 'pengawas', x.pengawas, 'maxlength="60"')}${fld('Pengawas 2 (opsional)', 'pengawas2', x.pengawas2 || '', 'maxlength="60"')}</div>${baru ? '<p class="mu" style="font-size:12px;margin:-8px 0 14px">Untuk "Semua ruang", pengawas diisi nanti per ruang.</p>' : ''}
       ${baru ? '' : `<div class="f2">${fld('Jumlah hadir', 'hadir', x.hadir, 'min="0"', 'number')}${fld('Jumlah tidak hadir', 'tidakHadir', x.tidakHadir, 'min="0"', 'number')}</div>
       <label class="fld"><span>Catatan pelaksanaan</span><textarea class="in" name="catatan" rows="3" maxlength="600">${esc(x.catatan)}</textarea></label>`}`,
     onOk(v) {
       const dasar = { tanggal: v.tanggal, mapel: v.mapel.trim(), jam: v.mulai.replace(':', '.') + ' - ' + v.selesai.replace(':', '.') };
       if (!dasar.tanggal || !dasar.mapel) { toast('Tanggal dan mata pelajaran wajib diisi.', 'er'); return false; }
-      if (v.idRuang === '*') Data.bulk('sesi', rooms.map((r, i) => Object.assign({ id: uid() + i, idRuang: r.id, pengawas: '', hadir: '', tidakHadir: '', catatan: '' }, dasar)));
-      else Data.save('sesi', Object.assign({ id: x.id, idRuang: v.idRuang, pengawas: v.pengawas.trim(), hadir: baru ? '' : v.hadir, tidakHadir: baru ? '' : v.tidakHadir, catatan: baru ? '' : v.catatan.trim() }, dasar));
+      if (v.idRuang === '*') Data.bulk('sesi', rooms.map((r, i) => Object.assign({ id: uid() + i, idRuang: r.id, pengawas: '', pengawas2: '', hadir: '', tidakHadir: '', catatan: '' }, dasar)));
+      else Data.save('sesi', Object.assign({ id: x.id, idRuang: v.idRuang, pengawas: v.pengawas.trim(), pengawas2: v.pengawas2.trim(), hadir: baru ? '' : v.hadir, tidakHadir: baru ? '' : v.tidakHadir, catatan: baru ? '' : v.catatan.trim() }, dasar));
       rerender(); toast('Jadwal disimpan.', 'ok');
     }
   });

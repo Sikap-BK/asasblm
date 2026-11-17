@@ -71,6 +71,8 @@ const ICONS = {
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
   book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>',
   shuffle: '<path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>',
+  eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22"/>',
   layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>'
 };
 const ic = n => '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
@@ -78,9 +80,10 @@ const ic = n => '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">' + (ICO
 // ---------- state ----------
 const KEY = { siswa: 'id', ruang: 'id', peserta: 'nisn', sesi: 'id', templat: 'id' };
 const S = { token: '', exp: 0, user: '', page: '', q: [], busy: false, rev: 0, lastBoot: 0, resync: false };
-const emptyDB = () => ({ siswa: [], ruang: [], peserta: [], sesi: [], templat: [], set: {}, assets: { logo1: '', logo2: '', ttd: '' } });
+const ASET_KOSONG = { logo1: '', logo2: '', ttd: '', stempel: '', kartubg: '' };
+const emptyDB = () => ({ siswa: [], ruang: [], peserta: [], sesi: [], templat: [], set: {}, assets: Object.assign({}, ASET_KOSONG) });
 let DB = emptyDB();
-const normDB = d => { const e = emptyDB(); Object.keys(e).forEach(k => { if (d && d[k]) e[k] = d[k]; }); e.assets = Object.assign({ logo1: '', logo2: '', ttd: '' }, e.assets); return e; };
+const normDB = d => { const e = emptyDB(); Object.keys(e).forEach(k => { if (d && d[k]) e[k] = d[k]; }); e.assets = Object.assign({}, ASET_KOSONG, e.assets); return e; };
 const saveDBSoon = debounce(() => { if (!Store.set('db', DB)) console.warn('Cache perangkat penuh — data tetap aman di server.'); }, 300);
 
 let _ix = { rev: -1 };
@@ -88,6 +91,20 @@ let _ix = { rev: -1 };
 function IX() {
   if (_ix.rev !== S.rev) _ix = { rev: S.rev, pes: new Map(DB.peserta.map(p => [p.nisn, p])), ruang: new Map(DB.ruang.map(r => [r.id, r])), sis: new Map(DB.siswa.map(s => [s.nisn, s])) };
   return _ix;
+}
+/** Nama sekolah: dari pengaturan; bila kosong, diambil langsung dari baris kop surat. */
+const namaSekolah = () => DB.set.namaSekolah || (typeof deteksiSekolah === 'function' ? deteksiSekolah(kopCfg()) : '');
+/** Nomor identitas kepala sekolah sesuai pilihan (NIP / NIY / NUPTK / dikosongkan). */
+function idKepsek() { const s = DB.set, j = s.jenisId == null ? 'NIP' : s.jenisId; return j && s.nipKepsek ? j + '. ' + s.nipKepsek : ''; }
+/** Gambar aset dipakai berulang (ratusan kartu) → jadikan satu Blob URL agar ringan saat cetak. */
+const _blob = new Map();
+function blobUrl(dataUrl) {
+  if (!dataUrl) return '';
+  if (_blob.has(dataUrl)) return _blob.get(dataUrl);
+  let url = dataUrl;
+  try { const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl), bin = atob(m[2]), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); url = URL.createObjectURL(new Blob([u8], { type: m[1] })); } catch (e) { }
+  if (_blob.size > 12) { const k = _blob.keys().next().value; URL.revokeObjectURL(_blob.get(k)); _blob.delete(k); }
+  _blob.set(dataUrl, url); return url;
 }
 const daftarKelas = () => [...new Set(DB.siswa.map(s => s.kelas).filter(Boolean))].sort(cmpKelas);
 const ruangUrut = () => DB.ruang.slice().sort((a, b) => nat(a.nama, b.nama));
@@ -222,7 +239,7 @@ function applyTheme(w1, w2) {
   r.style.setProperty('--s', /^#[0-9a-f]{6}$/i.test(w2 || '') ? w2 : '#0EA5A4');
 }
 function syncPub() {
-  const pub = Object.assign(Store.get('pub', {}), { namaSekolah: DB.set.namaSekolah || '', warna1: DB.set.warna1 || '', warna2: DB.set.warna2 || '', logo1: DB.assets.logo1 || '', bgVer: DB.set.bgVer || '' });
+  const pub = Object.assign(Store.get('pub', {}), { namaSekolah: namaSekolah(), warna1: DB.set.warna1 || '', warna2: DB.set.warna2 || '', logo1: DB.assets.logo1 || '', bgVer: DB.set.bgVer || '' });
   // latar login yang baru diunggah dari perangkat ini: samakan versinya dengan versi server
   const bg = Store.get('bg', null);
   if (bg && /^L/.test(bg.ver) && pub.bgVer && !/^L/.test(pub.bgVer)) { bg.ver = pub.bgVer; Store.set('bg', bg); }
@@ -266,7 +283,7 @@ async function submitLogin(e) {
   const d = res.data;
   S.token = d.token; S.exp = d.exp; S.user = d.user;
   Store.set('ses', { token: d.token, exp: d.exp, user: d.user });
-  $('#lg-p').value = '';
+  $('#lg-p').value = ''; $('#lg-p').type = 'password'; $('#lg-eye').innerHTML = ic('eye');
   S.lastBoot = Date.now();
   if (S.q.length) { enterApp(); pump(); }                           // lanjutkan kiriman yang tertunda
   else { DB = normDB(d.boot); S.rev++; Store.set('db', DB); syncPub(); enterApp(); }
@@ -291,13 +308,17 @@ function paintShell() {
   const s = DB.set, logo = DB.assets.logo1;
   $('#sd-logo').className = 'sd-logo' + (logo ? ' has-img' : '');
   $('#sd-logo').innerHTML = logo ? '<img alt="" src="' + logo + '">' : ic('book');
-  $('#sd-nama').textContent = s.namaSekolah || 'ASAS';
+  $('#sd-nama').textContent = namaSekolah() || 'ASAS';
   $('#ta').textContent = 'T.A. ' + (s.tahunAjaran || '—') + ' ' + (s.semester || '');
   $('#top-user').textContent = S.user || 'Admin';
   $('#demo-bar').hidden = !DEMO;
   paintSync();
 }
-function enterApp() { document.documentElement.className = 'is-app'; paintShell(); if (!location.hash) location.hash = '#/dashboard'; route(); }
+function enterApp() {
+  document.documentElement.className = 'is-app';
+  if (!DB.set.namaSekolah && namaSekolah() && !S.q.length) Data.set({ namaSekolah: namaSekolah() });   // isi otomatis dari kop
+  paintShell(); if (!location.hash) location.hash = '#/dashboard'; route();
+}
 function route() {
   if (!S.token) return;
   let name = location.hash.replace(/^#\/?/, '').split('/')[0];
@@ -431,6 +452,8 @@ addEventListener('afterprint', () => { $('#print-root').innerHTML = ''; });
 // ---------- mulai ----------
 async function init() {
   $('#lg-form').addEventListener('submit', submitLogin);
+  const mata = $('#lg-eye'); mata.innerHTML = ic('eye');
+  mata.addEventListener('click', () => { const p = $('#lg-p'), buka = p.type === 'password'; p.type = buka ? 'text' : 'password'; mata.innerHTML = ic(buka ? 'eyeOff' : 'eye'); mata.setAttribute('aria-label', buka ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'); p.focus(); });
   if (DEMO) await loadScript('js/demo.js');
   const ses = Store.get('ses'), db = Store.get('db');
   S.q = Store.get('q', []);

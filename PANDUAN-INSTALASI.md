@@ -97,6 +97,28 @@ Urutannya: pasang backend dulu → dapat alamat `/exec` → tempel ke frontend �
 
 ---
 
+## Menginstal ASAS sebagai aplikasi (HP & laptop)
+
+Setelah situs online di GitHub Pages (HTTPS), ASAS bisa dipasang seperti aplikasi biasa:
+
+- **Laptop (Chrome/Edge):** klik tombol **Instal aplikasi** di halaman login atau di menu samping, atau ikon instal di ujung kanan bilah alamat.
+- **HP Android (Chrome):** tombol **Instal aplikasi**, atau menu ⋮ → **Instal aplikasi**.
+- **iPhone/iPad (Safari):** tombol **Bagikan** → **Tambahkan ke Layar Utama**.
+
+Setelah terpasang, aplikasi terbuka tanpa bilah alamat dan tampilannya tetap muncul walau sinyal hilang (data terakhir dari perangkat). Saat ada versi baru, muncul pita **Versi baru tersedia** → ketuk **Muat ulang**.
+
+Ini bukan aplikasi Play Store; pemasangannya lewat browser. Bila alamat situs diganti, aplikasi harus dipasang ulang dari alamat baru.
+
+---
+
+## Memperbarui dari versi sebelumnya (paket pembaruan)
+
+1. **Backend:** buka proyek Apps Script → ganti seluruh isi `Kode.gs` dengan berkas baru → simpan → **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**. URL `/exec` tetap sama. Jangan jalankan `setupAppEnvironment` lagi.
+2. **Frontend:** ekstrak ZIP pembaruan, lalu salin **isi** folder `asas` di dalamnya ke folder `asas` lama Anda dan pilih **Ganti/Replace**. Paket pembaruan sengaja **tidak** berisi `js/config.js`, jadi URL `/exec` Anda tidak tertimpa.
+3. Dari folder `asas`: `git add .` → `git commit -m "Perbarui"` → `git push`. Tunggu 1–2 menit, buka situs, tekan **Ctrl+Shift+R**.
+
+---
+
 ## Memperbarui aplikasi
 
 **Frontend** (setelah mengubah berkas di folder `asas`):
@@ -108,6 +130,8 @@ git push
 ```
 
 Bila tampilan masih lama, tekan **Ctrl+Shift+R**.
+
+> Karena aplikasi bisa diinstal, berkas disimpan di perangkat. Setiap kali Anda sendiri mengubah berkas frontend (termasuk `js/config.js`), naikkan angka versi di baris `const VERSION = 'asas-v1.1.1';` pada `sw.js` (mis. menjadi `asas-v1.1.2`) sebelum `git push`, supaya perangkat mengambil berkas baru.
 
 **Backend** (setelah mengubah `Kode.gs`): **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**.
 Jangan pilih *New deployment* — itu membuat URL `/exec` baru dan aplikasi berhenti tersambung.

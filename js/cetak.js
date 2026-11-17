@@ -4,7 +4,13 @@
    "Simpan sebagai PDF" tersedia di dialog yang sama.
    ============================================================ */
 'use strict';
-const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '' };
+const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, _muat: false };
+/** Pilihan cetak (kertas, jumlah pengawas, tanda tangan kepsek) diingat di pengaturan. */
+function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.cetak || {}; if (PAPER[c.kertas]) Ck.kertas = c.kertas; if (c.nPengawas) Ck.nPengawas = +c.nPengawas === 2 ? 2 : 1; if (c.baKepsek != null) Ck.baKepsek = !!c.baKepsek; }
+const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek } });
+/** Kotak tanda tangan pengawas. Dua pengawas bila dipilih 2 atau Pengawas 2 pada jadwal terisi. */
+const duaPengawas = x => Ck.nPengawas === 2 || !!x.pengawas2;
+const kotakTtd = (atas, nama) => `<div>${atas}<div class="sp"></div>${nama ? '<u><b>' + esc(nama) + '</b></u>' : '(' + titik(40) + ')'}</div>`;
 const DOC_MARGIN = '12mm 15mm';
 
 /* ---------- sumber data ---------- */
@@ -17,7 +23,7 @@ function ckSiswa() {
 }
 /** Baris sesi yang dicetak. Bila belum ada jadwal → satu lembar kosong per ruang. */
 function ckSesi() {
-  if (!DB.sesi.length) return ruangUrut().filter(r => !Ck.fr || r.id === Ck.fr).map(r => ({ idRuang: r.id, tanggal: '', mapel: '', jam: '', pengawas: '', hadir: '', tidakHadir: '', catatan: '' }));
+  if (!DB.sesi.length) return ruangUrut().filter(r => !Ck.fr || r.id === Ck.fr).map(r => ({ idRuang: r.id, tanggal: '', mapel: '', jam: '', pengawas: '', pengawas2: '', hadir: '', tidakHadir: '', catatan: '' }));
   return sesiUrut(DB.sesi.filter(x => (!Ck.tgl || x.tanggal === Ck.tgl) && (!Ck.mapel || x.mapel === Ck.mapel) && (!Ck.fr || x.idRuang === Ck.fr)));
 }
 function pesertaRuang(idRuang) {
@@ -37,21 +43,24 @@ function dokInfo(x) {
   return `<table class="inf">${baris.map(b => `<tr><td>${b[0]}</td><td>:</td><td>${esc(b[1])}</td></tr>`).join('')}</table>`;
 }
 function daftarHadirHTML(x) {
-  const list = pesertaRuang(x.idRuang), ph = PAPER[Ck.kertas][1];
-  const tinggi = r1(clamp((ph - 172) / Math.max(list.length, 1), 5.6, 9.5));         // tinggi baris menyesuaikan jumlah peserta
+  const list = pesertaRuang(x.idRuang), ph = PAPER[Ck.kertas][1], dua = duaPengawas(x);
+  const tinggi = r1(clamp((ph - (dua ? 196 : 172)) / Math.max(list.length, 1), 5.6, 9.5));         // tinggi baris menyesuaikan jumlah peserta
   return `<div class="doc">${dokKepala('DAFTAR HADIR PESERTA')}${dokInfo(x)}
     <table class="grid" style="margin-top:4mm"><thead><tr><th style="width:10mm">No</th><th style="width:34mm">No Ujian</th><th>Nama</th><th style="width:20mm">Kelas</th><th style="width:48mm">Tanda Tangan</th></tr></thead><tbody>
     ${list.map((y, i) => `<tr style="height:${tinggi}mm"><td style="text-align:center">${i + 1}</td><td style="text-align:center">${esc(y.p.noUjian)}</td><td>${esc(y.s.nama)}</td><td style="text-align:center">${esc(y.s.kelas)}</td><td style="padding-left:${i % 2 ? 24 : 2}mm">${i + 1}.</td></tr>`).join('')
       || '<tr><td colspan="5" style="text-align:center;height:20mm">Belum ada peserta di ruang ini.</td></tr>'}
     </tbody></table>
     <div class="sgn"><div><table class="inf"><tr><td>Jumlah peserta</td><td>:</td><td>${list.length} orang</td></tr><tr><td>Hadir</td><td>:</td><td>${esc(x.hadir) || titik(8)} orang</td></tr><tr><td>Tidak hadir</td><td>:</td><td>${esc(x.tidakHadir) || titik(8)} orang</td></tr></table></div>
-      <div>Pengawas,<div class="sp"></div>${x.pengawas ? '<u><b>' + esc(x.pengawas) + '</b></u>' : '(' + titik(40) + ')'}</div></div></div>`;
+      ${dua ? '' : kotakTtd('Pengawas,', x.pengawas)}</div>
+    ${dua ? `<div class="sgn" style="margin-top:3mm">${kotakTtd('Pengawas 1,', x.pengawas)}${kotakTtd('Pengawas 2,', x.pengawas2)}</div>` : ''}</div>`;
 }
 function beritaAcaraHTML(x) {
   const s = DB.set, r = IX().ruang.get(x.idRuang) || {}, n = pesertaRuang(x.idRuang).length, d = pTgl(x.tanggal);
   const [m1, m2] = (x.jam || '').split(/\s*-\s*/);
-  const nip = s.nipKepsek ? (/[a-z]/i.test(s.nipKepsek) ? s.nipKepsek : 'NIP. ' + s.nipKepsek) : '';
-  const baris = [['Sekolah', s.namaSekolah || titik(50)], ['Ruang', r.nama || ''], ['Jumlah peserta seharusnya', n + ' orang'], ['Jumlah hadir', (esc(x.hadir) || titik(10)) + ' orang'], ['Jumlah tidak hadir', (esc(x.tidakHadir) || titik(10)) + ' orang'], ['Nomor peserta tidak hadir', titik(60)]];
+  const dua = duaPengawas(x), titi = esc(s.titimangsa || titik(40));
+  // Tanda tangan kepala sekolah di berita acara selalu dikosongkan (ditandatangani basah), hanya nama & nomor.
+  const kepsek = `<div>Mengetahui,<br>Kepala Sekolah,<div class="sp"></div>${s.kepsek ? '<u><b>' + esc(s.kepsek) + '</b></u>' : '(' + titik(40) + ')'}${idKepsek() ? '<br>' + esc(idKepsek()) : ''}</div>`;
+  const baris = [['Sekolah', esc(namaSekolah()) || titik(50)], ['Ruang', r.nama || ''], ['Jumlah peserta seharusnya', n + ' orang'], ['Jumlah hadir', (esc(x.hadir) || titik(10)) + ' orang'], ['Jumlah tidak hadir', (esc(x.tidakHadir) || titik(10)) + ' orang'], ['Nomor peserta tidak hadir', titik(60)]];
   return `<div class="doc">${dokKepala('BERITA ACARA PELAKSANAAN')}
     <p style="text-align:justify;margin-top:5mm;line-height:1.7">Pada hari ini ${d ? '<b>' + HARI[d.getDay()] + '</b> tanggal <b>' + d.getDate() + ' ' + BLN[d.getMonth()] + ' ' + d.getFullYear() + '</b>' : titik(20) + ' tanggal ' + titik(30)},
       telah dilaksanakan Sumatif Akhir Semester ${esc(s.semester || '')} Tahun Ajaran ${esc(s.tahunAjaran || '')} untuk mata pelajaran <b>${esc(x.mapel) || titik(40)}</b>,
@@ -60,14 +69,15 @@ function beritaAcaraHTML(x) {
     <p>Catatan selama pelaksanaan:</p>
     <div style="border:.3mm solid #000;min-height:34mm;padding:2mm 3mm;margin-top:2mm">${esc(x.catatan) || '<div class="dots"></div><div class="dots"></div><div class="dots"></div>'}</div>
     <p style="margin-top:5mm;text-align:justify">Demikian berita acara ini dibuat dengan sesungguhnya untuk dipergunakan sebagaimana mestinya.</p>
-    <div class="sgn"><div>Mengetahui,<br>Kepala Sekolah,<div class="sp">${DB.assets.ttd ? `<img alt="" src="${DB.assets.ttd}">` : ''}</div><u><b>${esc(s.kepsek || titik(40))}</b></u><br>${esc(nip)}</div>
-      <div>${esc(s.titimangsa || titik(40))}<br>Pengawas,<div class="sp"></div>${x.pengawas ? '<u><b>' + esc(x.pengawas) + '</b></u>' : '(' + titik(40) + ')'}</div></div></div>`;
+    ${dua ? `<div class="sgn">${kotakTtd('<br>Pengawas 1,', x.pengawas)}${kotakTtd(titi + '<br>Pengawas 2,', x.pengawas2)}</div>${Ck.baKepsek ? `<div class="sgn tengah">${kepsek}</div>` : ''}`
+      : `<div class="sgn">${Ck.baKepsek ? kepsek : '<div></div>'}${kotakTtd(titi + '<br>Pengawas,', x.pengawas)}</div>`}</div>`;
 }
 
 /* ================= HALAMAN CETAK ================= */
 Pages.cetak = {
   title: 'Cetak Dokumen',
   render(el) {
+    ckMuat();
     const tab = Ck.tab, rooms = ruangUrut(), kelas = daftarKelas(), tpls = daftarTemplat();
     if (Ck.scope === 'kelas' && !kelas.includes(Ck.kelas)) Ck.kelas = kelas[0] || '';
     if (Ck.scope === 'ruang' && !rooms.some(r => r.id === Ck.ruang)) Ck.ruang = (rooms[0] || {}).id || '';
@@ -87,7 +97,9 @@ Pages.cetak = {
         ${DB.sesi.length ? `<label class="fld"><span>Hari / tanggal</span><select class="in" data-ch="ckSet" name="tgl">${opts(tgl.map(t => [t, fTgl(t, true)]), Ck.tgl, 'Semua tanggal')}</select></label>
           <label class="fld"><span>Mata pelajaran</span><select class="in" data-ch="ckSet" name="mapel">${opts(mapel, Ck.mapel, 'Semua mata pelajaran')}</select></label>`
           : `<div class="note" style="margin-bottom:14px">${ic('info')}<span>Belum ada jadwal sesi — dokumen dicetak per ruang dengan isian kosong untuk ditulis tangan.</span></div>`}
-        <label class="fld"><span>Ruang</span><select class="in" data-ch="ckSet" name="fr">${opts(rooms.map(r => [r.id, r.nama]), Ck.fr, 'Semua ruang')}</select></label>`;
+        <label class="fld"><span>Ruang</span><select class="in" data-ch="ckSet" name="fr">${opts(rooms.map(r => [r.id, r.nama]), Ck.fr, 'Semua ruang')}</select></label>
+        <div class="fld"><span>Jumlah pengawas ruang</span><span class="seg">${[1, 2].map(k => `<button class="${Ck.nPengawas === k ? 'on' : ''}" data-act="ckPengawas" data-v="${k}">${k} pengawas</button>`).join('')}</span></div>
+        ${tab === 'berita' ? `<label class="row" style="gap:8px;font-weight:500;margin-bottom:14px"><span class="sw"><input type="checkbox" data-ch="ckKepsek" ${Ck.baKepsek ? 'checked' : ''}><i></i></span>Kolom tanda tangan Kepala Sekolah</label>` : ''}`;
       info = `<b>${n}</b> ${tab === 'hadir' ? 'daftar hadir' : 'berita acara'} (satu per ruang per sesi)`;
     }
     el.innerHTML = `
@@ -118,7 +130,9 @@ function cetakFit() { fitPaper('#ck-pv', Ck.tab === 'kartu' ? dims(ckTemplat()).
 window.cetakFit = cetakFit;
 Act.ckTab = t => { Ck.tab = t.dataset.v; rerender(); };
 Act.ckScope = t => { Ck.scope = t.dataset.v; rerender(); };
-Act.ckKertas = t => { Ck.kertas = t.dataset.v; rerender(); };
+Act.ckKertas = t => { Ck.kertas = t.dataset.v; ckSimpan(); rerender(); };
+Act.ckPengawas = t => { Ck.nPengawas = +t.dataset.v; ckSimpan(); rerender(); };
+On.ckKepsek = t => { Ck.baKepsek = t.checked; ckSimpan(); rerender(); };
 On.ckSet = t => { Ck[t.name] = t.value; if (t.name === 'tgl') Ck.mapel = ''; rerender(); };
 Act.ckCetak = async t => {
   if (Ck.tab !== 'kartu') { const list = ckSesi(); printDoc(list.map(Ck.tab === 'hadir' ? daftarHadirHTML : beritaAcaraHTML), Ck.kertas, DOC_MARGIN); return; }
@@ -145,8 +159,8 @@ function lapData() {
     rows: DB.peserta.filter(p => ix.sis.has(p.nisn) && (!Lp.f || p.idRuang === Lp.f)).sort((a, b) => nat(a.noUjian, b.noUjian)).map(p => { const s = ix.sis.get(p.nisn); return [p.noUjian, s.nama, s.nisn, s.kelas, (ix.ruang.get(p.idRuang) || {}).nama || '', p.noUrut]; }).filter(cari)
   };
   return {
-    judul: 'JADWAL SESI', berkas: 'Jadwal-Sesi', lanskap: true, cols: ['No', 'Hari / Tanggal', 'Mata Pelajaran', 'Jam', 'Ruang', 'Pengawas', 'Hadir', 'Tidak Hadir', 'Catatan'], filter: [...new Set(DB.sesi.map(x => x.tanggal))].sort().map(t => [t, fTgl(t, true)]), label: 'Semua Tanggal',
-    rows: sesiUrut(DB.sesi.filter(x => !Lp.f || x.tanggal === Lp.f)).map(x => [fTgl(x.tanggal, true), x.mapel, x.jam, (ix.ruang.get(x.idRuang) || {}).nama || '', x.pengawas, x.hadir, x.tidakHadir, x.catatan]).filter(cari)
+    judul: 'JADWAL SESI', berkas: 'Jadwal-Sesi', lanskap: true, cols: ['No', 'Hari / Tanggal', 'Mata Pelajaran', 'Jam', 'Ruang', 'Pengawas 1', 'Pengawas 2', 'Hadir', 'Tidak Hadir', 'Catatan'], filter: [...new Set(DB.sesi.map(x => x.tanggal))].sort().map(t => [t, fTgl(t, true)]), label: 'Semua Tanggal',
+    rows: sesiUrut(DB.sesi.filter(x => !Lp.f || x.tanggal === Lp.f)).map(x => [fTgl(x.tanggal, true), x.mapel, x.jam, (ix.ruang.get(x.idRuang) || {}).nama || '', x.pengawas, x.pengawas2 || '', x.hadir, x.tidakHadir, x.catatan]).filter(cari)
   };
 }
 Pages.laporan = {

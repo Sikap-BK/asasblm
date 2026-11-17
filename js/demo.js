@@ -16,14 +16,14 @@ window.Demo = (() => {
     const siswa = [];
     for (let i = 0; i < 72; i++) siswa.push({ id: 's' + i, nama: depan[i % depan.length] + ' ' + belakang[(i * 5 + 3) % belakang.length], nis: String(2425001 + i), nisn: '00' + String(91823400 + i * 37), tempatLahir: kota[i % kota.length], tglLahir: (2010 + Math.floor(i / 24)) + '-' + String(i % 12 + 1).padStart(2, '0') + '-' + String(i % 27 + 1).padStart(2, '0'), kelas: kelas[Math.floor(i / 12)], foto: '', fotoId: '' });
     const y = new Date().getFullYear();
-    return { user: 'admin', sandi: 'admin', siswa, ruang: [], peserta: [], sesi: [], templat: [], assets: { logo1: '', logo2: '', ttd: '', loginbg: '' },
+    return { user: 'admin', sandi: 'admin', siswa, ruang: [], peserta: [], sesi: [], templat: [], assets: { logo1: '', logo2: '', ttd: '', loginbg: '', stempel: '', kartubg: '' },
       set: { namaSekolah: 'SMP BUDI LUHUR MANDIRI', tahunAjaran: y + '/' + (y + 1), semester: 'Ganjil', kepsek: '', nipKepsek: '', titimangsa: '', warna1: '#4F46E5', warna2: '#0EA5A4', bgVer: '' } };
   }
   const load = () => { if (!d) { try { d = JSON.parse(localStorage.getItem(K)); } catch (e) { } if (!d) d = seed(); } return d; };
   const save = () => { try { localStorage.setItem(K, JSON.stringify(d)); } catch (e) { } };
   const ok = data => ({ success: true, data: JSON.parse(JSON.stringify(data)), ms: 1 });
   const fail = (message, x) => Object.assign({ success: false, message }, x);
-  const boot = () => ({ siswa: d.siswa, ruang: d.ruang, peserta: d.peserta, sesi: d.sesi, templat: d.templat, set: d.set, assets: { logo1: d.assets.logo1, logo2: d.assets.logo2, ttd: d.assets.ttd } });
+  const boot = () => ({ siswa: d.siswa, ruang: d.ruang, peserta: d.peserta, sesi: d.sesi, templat: d.templat, set: d.set, assets: { logo1: d.assets.logo1, logo2: d.assets.logo2, ttd: d.assets.ttd, stempel: d.assets.stempel || '', kartubg: d.assets.kartubg || '' } });
   function upsert(t, rows) { const k = KEYS[t]; rows.forEach(r => { const i = d[t].findIndex(x => x[k] === r[k]); if (i > -1) d[t][i] = Object.assign({}, d[t][i], r); else d[t].push(r); }); }
   const A = {
     login: x => (x.u === d.user && x.p === d.sandi) ? ok({ token: 'demo', exp: Date.now() + 864e5, user: d.user, boot: boot() }) : fail('Nama pengguna atau kata sandi salah. (Mode demo: admin / admin)'),

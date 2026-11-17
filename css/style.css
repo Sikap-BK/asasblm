@@ -60,6 +60,11 @@ svg.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor
 .lg-card h3 { text-align: center; font-size: 38px; line-height: 1.2; font-weight: 700; }
 .lg-card label { font-size: 17px; margin: 0 0 10px; }
 .lg-card input { height: 60px; border-radius: 999px; border: 2px solid transparent; background: #fff; color: #1E293B; padding: 0 26px; font-size: 16px; margin-bottom: 26px; outline: none; }
+.lg-pw { position: relative; display: block; } .lg-pw input { width: 100%; padding-right: 62px; }
+.lg-pw button { position: absolute; right: 8px; top: 8px; width: 44px; height: 44px; margin: 0; padding: 0; border-radius: 50%; background: none; box-shadow: none; color: #64748B; display: grid; place-items: center; }
+.lg-pw button:hover { background: #F1F5F9; filter: none; }
+.lg-card button.lg-install { height: 46px; margin-top: 14px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.3); box-shadow: none; font-size: 15px; font-weight: 500; }
+.sd-install { margin: 0 12px 10px; height: 38px; border: 1px dashed var(--bd); border-radius: var(--r); background: var(--p-50); color: var(--p); font-weight: 600; font-size: 13px; }
 .lg-card input:focus { border-color: var(--s); box-shadow: 0 0 0 4px color-mix(in srgb, var(--s) 35%, transparent); }
 .lg-card button { height: 70px; margin-top: 6px; border: 0; border-radius: 999px; color: #fff; font-size: 19px; font-weight: 700; letter-spacing: .02em; background: linear-gradient(90deg, var(--p), var(--s)); box-shadow: 0 12px 28px -8px color-mix(in srgb, var(--p) 70%, transparent); transition: transform .12s, filter .12s; }
 .lg-card button:hover { filter: brightness(1.08); }
@@ -72,7 +77,7 @@ svg.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor
   .lg-main { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 28px; padding: 28px 24px 40px; }
   .lg-left p { display: none; } .lg-bar { margin: 18px 0 16px; height: 5px; }
   .lg-card { width: 100%; padding: 30px 24px 32px; border-radius: 22px; }
-  .lg-card h3 { font-size: 28px; } .lg-card input { height: 52px; margin-bottom: 18px; } .lg-card button { height: 56px; font-size: 17px; }
+  .lg-card h3 { font-size: 28px; } .lg-card input { height: 52px; margin-bottom: 18px; } .lg-pw button { top: 4px; } .lg-card button { height: 56px; font-size: 17px; }
   .lg-card label { font-size: 15px; }
 }
 
@@ -268,7 +273,10 @@ textarea.in { height: auto; padding: 8px 12px; resize: vertical; }
 .kop-garis { border-top: solid #000; border-bottom: solid #000; margin-top: 1.2mm; }
 .kartu { position: relative; overflow: hidden; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; border: .25mm dashed #9aa3b2; line-height: 1.25; }
 .kartu.solid { border-style: solid; border-color: #000; } .kartu.none { border-color: transparent; }
-.k-el { position: absolute; }
+.k-el { position: absolute; z-index: 2; }
+.k-bg { position: absolute; inset: 0; z-index: 0; background-size: 100% 100%; background-repeat: no-repeat; }
+.k-stempel { z-index: 1; } .k-stempel img { display: block; width: 100%; height: auto; }
+.k-stempel.kosong { border: .3mm dashed #7c8aa5; border-radius: 50%; aspect-ratio: 1; display: grid; place-items: center; font-size: 6pt; color: #7c8aa5; }
 .k-judul { text-align: center; font-weight: 700; } .k-judul small { display: block; font-weight: 400; font-size: .82em; }
 .k-f { display: flex; white-space: nowrap; overflow: hidden; } .k-f > span:first-child { flex: none; } .k-f > i { flex: none; font-style: normal; width: 1.6em; text-align: center; } .k-f > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .k-foto { border: .25mm solid #555; display: grid; place-items: center; overflow: hidden; color: #777; font-size: 6pt; text-align: center; background: #f4f5f7; }
@@ -280,6 +288,7 @@ textarea.in { height: auto; padding: 8px 12px; resize: vertical; }
 .doc table { border-collapse: collapse; width: 100%; }
 .doc .inf td { padding: .6mm 1mm; vertical-align: top; } .doc .inf td:first-child { width: 36mm; } .doc .inf td:nth-child(2) { width: 4mm; }
 .doc .grid th, .doc .grid td { border: .3mm solid #000; padding: .3mm 2mm; line-height: 1.15; font-size: 11pt; } .doc .grid th { text-align: center; font-size: 11pt; } .doc .grid thead { display: table-header-group; } .doc .grid tr { break-inside: avoid; }
+.doc .sgn.tengah { justify-content: center; text-align: center; margin-top: 5mm; } .doc .sgn.tengah .sp { justify-content: center; }
 .doc .sgn { display: flex; justify-content: space-between; margin-top: 8mm; break-inside: avoid; } .doc .sgn > div { width: 70mm; } .doc .sgn .sp { height: 20mm; display: flex; align-items: center; } .doc .sgn .sp img { max-height: 24mm; max-width: 60mm; }
 .doc .dots { border-bottom: .3mm dotted #000; height: 7.5mm; }
 .doc.rep { font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; } .doc.rep .grid th { font-size: 9pt; background: #eee; } .doc.rep .grid td { padding: .8mm 1.6mm; }

@@ -25,7 +25,7 @@ function kopHTML(sc = 1, cfg = kopCfg()) {
   const A = DB.assets, h = r2(cfg.logoH * sc), logos = [];
   if (A.logo1) logos.push([A.logo1, cfg.logo1Pos]);
   if (+cfg.logoCount === 2 && A.logo2) logos.push([A.logo2, cfg.logo2Pos]);
-  const sisi = p => logos.filter(l => l[1] === p).map(l => `<img alt="" src="${l[0]}" style="height:${h}mm">`).join('');
+  const sisi = p => logos.filter(l => l[1] === p).map(l => `<img alt="" src="${blobUrl(l[0])}" style="height:${h}mm">`).join('');
   const n = Math.max(logos.filter(l => l[1] === 'L').length, logos.filter(l => l[1] === 'R').length);
   const sw = n ? `style="min-width:${r2(n * h)}mm"` : '';             // sisi kiri-kanan seimbang → teks tetap di tengah
   return `<div class="kop"><div class="kop-row"><div class="kop-side" ${sw}>${sisi('L')}</div><div class="kop-teks">${cfg.lines.map(l =>
@@ -98,15 +98,18 @@ Act.kopLogoHapus = t => { simpanAset(t.dataset.k, ''); rerender(); };
 
 /* ================= DESAIN KARTU ================= */
 const FIELD_DEF = [['noUjian', 'No. Peserta', 1], ['nama', 'Nama', 1], ['nisn', 'NISN', 1], ['nis', 'NIS', 0], ['ttl', 'Tempat, Tgl Lahir', 1], ['kelas', 'Kelas', 1], ['ruang', 'Ruang', 1], ['noUrut', 'No. Urut / Meja', 0]];
-const EL_NAMA = { kop: 'Kop Surat', judul: 'Judul Kartu', foto: 'Pasfoto', ttd: 'Tanda Tangan' };
+const EL_NAMA = { kop: 'Kop Surat', judul: 'Judul Kartu', foto: 'Pasfoto', ttd: 'Tanda Tangan', stempel: 'Stempel Sekolah' };
 function tplBaru() {
-  const t = { id: uid(), jenis: 'Kartu', kertas: 'A4', cols: 2, rows: 4, L: { nama: 'Kartu Sumatif', margin: 8, gap: 3, showKop: true, showFoto: true, showTtd: true, border: 'dashed',
+  const t = { id: uid(), jenis: 'Kartu', kertas: 'A4', cols: 2, rows: 4, L: { nama: 'Kartu Sumatif', margin: 8, gap: 3, showKop: true, showFoto: true, showTtd: true, showStempel: false, stempelOp: .9, showBg: false, bgOp: 1, border: 'dashed',
     judul: 'KARTU PESERTA', sub: 'SUMATIF AKHIR SEMESTER {semester} · T.A. {tahun}', kopScale: .5, labelW: 20, el: {},
     fields: FIELD_DEF.map(f => ({ k: f[0], label: f[1], show: !!f[2], b: f[0] === 'noUjian' || f[0] === 'nama' ? 1 : 0 })) } };
   tataUlang(t); return t;
 }
 function tplParse(row) {
-  try { const [c, r] = String(row.grid).split('x').map(Number), L = JSON.parse(row.layout); if (!L.el || !L.fields) throw 0; return { id: row.id, jenis: row.jenis, kertas: PAPER[row.kertas] ? row.kertas : 'A4', cols: c || 2, rows: r || 4, L }; }
+  try { const [c, r] = String(row.grid).split('x').map(Number), L = JSON.parse(row.layout); if (!L.el || !L.fields) throw 0;
+    if (!L.el.stempel) { const a = L.el.ttd || { x: 40, y: 40 }; L.el.stempel = { x: r1(Math.max(0, a.x - 9)), y: r1(a.y + 1), w: 20 }; }   // templat lama: lengkapi elemen baru
+    if (L.stempelOp == null) L.stempelOp = .9; if (L.bgOp == null) L.bgOp = 1;
+    return { id: row.id, jenis: row.jenis, kertas: PAPER[row.kertas] ? row.kertas : 'A4', cols: c || 2, rows: r || 4, L }; }
   catch (e) { const t = tplBaru(); t.id = row.id; return t; }
 }
 const tplWire = t => ({ id: t.id, jenis: 'Kartu', kertas: t.kertas, grid: t.cols + 'x' + t.rows, layout: JSON.stringify(t.L) });
@@ -116,9 +119,12 @@ function dims(t) {
   const [pw, ph] = PAPER[t.kertas], m = +t.L.margin, g = +t.L.gap;
   return { pw, ph, W: Math.floor((pw - 2 * m - (t.cols - 1) * g) / t.cols * 10) / 10, H: Math.floor((ph - 2 * m - (t.rows - 1) * g - .6) / t.rows * 10) / 10 };
 }
+/** NIS dan NISN sama-sama tampil → digabung jadi satu baris "NIS / NISN : 0000 / 00000000". */
+const gabungNis = L => { const a = L.fields.find(f => f.k === 'nis'), b = L.fields.find(f => f.k === 'nisn'); return !!(a && b && a.show && b.show); };
+const fieldTampil = L => { const g = gabungNis(L); return L.fields.filter(f => f.show && !(g && f.k === 'nis')).map(f => g && f.k === 'nisn' ? Object.assign({}, f, { label: 'NIS / NISN', gabung: true }) : f); };
 /** Susun posisi semua elemen secara otomatis agar muat di ukuran kartu. */
 function tataUlang(t) {
-  const { W, H } = dims(t), L = t.L, kc = kopCfg(), pad = r1(clamp(W * .035, 2, 4)), pt = .3528;
+  const { W, H } = dims(t), L = t.L, kc = kopCfg(), pad = r1(clamp(W * .035, 2, 4)), pt = .3528, g = gabungNis(L);
   for (let k = clamp(W / 100, .5, 1.3), coba = 0; coba < 14; coba++, k *= .93) {
     let y = pad;
     L.kopScale = r2(clamp((W - 2 * pad) / 175 * Math.min(1, k * 1.15), .25, 1));
@@ -130,30 +136,31 @@ function tataUlang(t) {
     const ffs = r1(clamp(8.2 * k, 5, 10.5)), lh = ffs * pt * 1.5;
     const fw = L.showFoto ? clamp(W * .22, 12, 30) : 0, fh = fw * 4 / 3;
     L.el.foto = { x: r1(W - pad - fw), y: r1(y), w: r1(fw), h: r1(fh) };
-    L.labelW = r1(Math.max(...L.fields.filter(f => f.show).map(f => f.label.length), 4) * ffs * pt * .56 + 1);
+    L.labelW = r1(Math.max(...fieldTampil(L).map(f => f.label.length), 4) * ffs * pt * .56 + 1);
     let fy = y;
-    L.fields.forEach(f => { f.x = pad; f.w = r1(W - 2 * pad - (L.showFoto ? fw + 1.5 : 0)); f.fs = ffs; f.y = r1(fy); if (f.show) fy += lh; });
+    L.fields.forEach(f => { f.x = pad; f.w = r1(W - 2 * pad - (L.showFoto ? fw + 1.5 : 0)); f.fs = ffs; f.y = r1(fy); if (f.show && !(g && f.k === 'nis')) fy += lh; });
     const tfs = r1(clamp(7.2 * k, 4.8, 9.5)), tw = r1(clamp(W * .46, 28, 72)), th = tfs * pt * 1.25 * 4 + tfs * pt * 2.6;
     const isi = Math.max(fy, L.showFoto ? y + fh : 0);
     L.el.ttd = { x: r1(W - pad - tw), y: r1(Math.max(H - pad - th, isi + .8)), w: tw, fs: tfs };
+    const sw = r1(clamp(W * .2, 14, 30));                 // stempel menindih sisi kiri tanda tangan
+    L.el.stempel = { x: r1(Math.max(pad, L.el.ttd.x - sw * .55)), y: r1(Math.min(H - sw - 1, L.el.ttd.y + tfs * pt * 1.2)), w: sw };
     if (!L.showTtd ? isi <= H - pad : L.el.ttd.y + th <= H - pad + .3) break;   // sudah muat
   }
 }
 const CONTOH = { id: '_', nama: 'AHMAD FAHREZI PUTRA', nis: '2425001', nisn: '0091823412', tempatLahir: 'Sangatta', tglLahir: '2012-05-14', kelas: 'VII-A', _v: { noUjian: '04-2025-001', ruang: 'Ruang 01', noUrut: '1' } };
 function cardHTML(t, s, design) {
-  const { W, H } = dims(t), L = t.L, ix = IX(), p = ix.pes.get(s.nisn) || {}, set = DB.set, pos = o => `left:${o.x}mm;top:${o.y}mm;`;
+  const { W, H } = dims(t), L = t.L, ix = IX(), p = ix.pes.get(s.nisn) || {}, set = DB.set, A = DB.assets, pos = o => `left:${o.x}mm;top:${o.y}mm;`;
   const val = Object.assign({ noUjian: p.noUjian || '', nama: s.nama, nisn: s.nisn, nis: s.nis, ttl: [s.tempatLahir, fTgl(s.tglLahir)].filter(Boolean).join(', '), kelas: s.kelas, ruang: (ix.ruang.get(p.idRuang) || {}).nama || '', noUrut: p.noUrut || '' }, s._v);
   const E = (id, style, cls, inner) => `<div class="k-el ${cls}" ${design ? `data-el="${id}"` : ''} style="${style}">${inner}</div>`;
   const sub = String(L.sub || '').replace('{semester}', (set.semester || '').toUpperCase()).replace('{tahun}', set.tahunAjaran || '');
   let h = '';
+  if (L.showBg && A.kartubg) h += `<div class="k-bg" style="background-image:url('${blobUrl(A.kartubg)}');opacity:${L.bgOp}"></div>`;   // lapisan paling bawah
+  if (L.showStempel) h += E('stempel', pos(L.el.stempel) + `width:${L.el.stempel.w}mm;opacity:${L.stempelOp}`, 'k-stempel' + (A.stempel || !design ? '' : ' kosong'), A.stempel ? `<img alt="" src="${blobUrl(A.stempel)}">` : (design ? 'STEMPEL' : ''));   // di bawah tulisan & tanda tangan
   if (L.showKop) h += E('kop', pos(L.el.kop) + `width:${L.el.kop.w}mm`, '', kopHTML(L.kopScale));
   h += E('judul', pos(L.el.judul) + `width:${L.el.judul.w}mm;font-size:${L.el.judul.fs}pt`, 'k-judul', esc(L.judul) + (sub ? `<small>${esc(sub)}</small>` : ''));
-  L.fields.forEach(f => { if (f.show) h += E('f:' + f.k, pos(f) + `width:${f.w}mm;font-size:${f.fs}pt;${f.b ? 'font-weight:700' : ''}`, 'k-f', `<span style="width:${L.labelW}mm">${esc(f.label)}</span><i>:</i><span>${esc(val[f.k])}</span>`); });
+  fieldTampil(L).forEach(f => { h += E('f:' + f.k, pos(f) + `width:${f.w}mm;font-size:${f.fs}pt;${f.b ? 'font-weight:700' : ''}`, 'k-f', `<span style="width:${L.labelW}mm">${esc(f.label)}</span><i>:</i><span>${esc(f.gabung ? val.nis + ' / ' + val.nisn : val[f.k])}</span>`); });
   if (L.showFoto) { const src = Foto.src(s); h += E('foto', pos(L.el.foto) + `width:${L.el.foto.w}mm;height:${L.el.foto.h}mm`, 'k-foto', src ? `<img alt="" src="${src}">` : '<span>FOTO<br>3 × 4</span>'); }
-  if (L.showTtd) {
-    const nip = set.nipKepsek ? (/[a-z]/i.test(set.nipKepsek) ? set.nipKepsek : 'NIP. ' + set.nipKepsek) : '';
-    h += E('ttd', pos(L.el.ttd) + `width:${L.el.ttd.w}mm;font-size:${L.el.ttd.fs}pt`, 'k-ttd', `<div>${esc(set.titimangsa || '')}&nbsp;</div><div>Kepala Sekolah,</div><div class="sig">${DB.assets.ttd ? `<img alt="" src="${DB.assets.ttd}">` : ''}</div><div><u>${esc(set.kepsek || '..............................')}</u></div><div>${esc(nip)}</div>`);
-  }
+  if (L.showTtd) h += E('ttd', pos(L.el.ttd) + `width:${L.el.ttd.w}mm;font-size:${L.el.ttd.fs}pt`, 'k-ttd', `<div>${esc(set.titimangsa || (design ? '(tempat, tanggal)' : ''))}&nbsp;</div><div>Kepala Sekolah,</div><div class="sig">${A.ttd ? `<img alt="" src="${blobUrl(A.ttd)}">` : ''}</div><div><u>${esc(set.kepsek || '..............................')}</u></div><div>${esc(idKepsek())}</div>`);
   return `<div class="kartu ${L.border || 'dashed'}" style="width:${W}mm;height:${H}mm">${h}</div>`;
 }
 /** Satu lembar berisi kolom × baris kartu. */
@@ -171,7 +178,7 @@ Pages.kartu = {
     const list = daftarTemplat();
     if (!KD.t || (!KD.dirty && list.length && !list.some(x => x.id === KD.t.id))) { KD.t = list[0] || tplBaru(); KD.dirty = !list.length; KD.sel = ''; }
     else if (!KD.dirty) { const x = list.find(y => y.id === KD.t.id); if (x) KD.t = x; }
-    const t = KD.t, L = t.L, d = dims(t), tersimpan = list.some(x => x.id === t.id);
+    const t = KD.t, L = t.L, d = dims(t), A = DB.assets, tersimpan = list.some(x => x.id === t.id);
     const sw = (k, label) => `<label class="row" style="gap:8px;font-weight:500"><span class="sw"><input type="checkbox" data-ch="kdSw" data-k="${k}" ${L[k] ? 'checked' : ''}><i></i></span>${label}</label>`;
     const stp = (k, label) => `<span class="row" style="gap:6px"><span class="mu" style="font-size:12px">${label}</span><span class="stp"><button data-act="kdGrid" data-k="${k}" data-d="-1">−</button><b>${t[k]}</b><button data-act="kdGrid" data-k="${k}" data-d="1">+</button></span></span>`;
     el.innerHTML = `
@@ -183,7 +190,14 @@ Pages.kartu = {
           <button class="btn sm" data-act="kdBaru">${ic('plus')} Templat Baru</button>${tersimpan ? `<button class="ib dan" data-act="kdHapus" aria-label="Hapus templat">${ic('trash')}</button>` : ''}</div>
         <div class="row" style="gap:16px;margin-top:14px"><span class="seg">${[['A4', 'A4 (210 × 297 mm)'], ['F4', 'F4 (215 × 330 mm)']].map(p => `<button class="${t.kertas === p[0] ? 'on' : ''}" data-act="kdKertas" data-v="${p[0]}">${p[1]}</button>`).join('')}</span>
           ${stp('cols', 'Kolom')}${stp('rows', 'Baris')}<span class="chip">${t.cols * t.rows} kartu / lembar</span><span class="chip plain">Ukuran kartu ${d.W} × ${d.H} mm</span></div>
-        <div class="row" style="gap:22px;margin-top:14px">${sw('showKop', 'Kop Surat')}${sw('showFoto', 'Pasfoto Siswa')}${sw('showTtd', 'Tanda Tangan Kepala Sekolah')}</div></div>
+        <div class="row" style="gap:22px;margin-top:14px">${sw('showKop', 'Kop Surat')}${sw('showFoto', 'Pasfoto Siswa')}${sw('showTtd', 'Tanda Tangan Kepala Sekolah')}${sw('showStempel', 'Stempel Sekolah')}${sw('showBg', 'Latar Kartu')}</div>
+        <div class="row" style="gap:12px;margin-top:14px;align-items:flex-end">
+          <div class="logo-box" style="flex:1 1 230px"><span class="th">${A.stempel ? `<img alt="" src="${A.stempel}">` : ic('image')}</span><div><b>Stempel sekolah</b><div class="mu" style="font-size:12px;margin-bottom:6px">PNG latar transparan. Dicetak di bawah tulisan & tanda tangan.</div>
+            <button class="btn sm" data-act="kdAset" data-k="stempel">${ic('upload')} ${A.stempel ? 'Ganti' : 'Unggah'}</button>${A.stempel ? `<button class="ib dan" data-act="kdAsetHapus" data-k="stempel" aria-label="Hapus stempel">${ic('trash')}</button>` : ''}</div></div>
+          <div class="logo-box" style="flex:1 1 230px"><span class="th">${A.kartubg ? `<img alt="" src="${A.kartubg}">` : ic('image')}</span><div><b>Gambar latar kartu</b><div class="mu" style="font-size:12px;margin-bottom:6px">JPG/PNG. Direntangkan memenuhi kartu.</div>
+            <button class="btn sm" data-act="kdAset" data-k="kartubg">${ic('upload')} ${A.kartubg ? 'Ganti' : 'Unggah'}</button>${A.kartubg ? `<button class="ib dan" data-act="kdAsetHapus" data-k="kartubg" aria-label="Hapus latar">${ic('trash')}</button>` : ''}</div></div>
+          <label class="fld" style="flex:1 1 230px;margin:0"><span>Tempat & tanggal tanda tangan</span><input class="in" value="${esc(DB.set.titimangsa || '')}" data-on="kdTiti" data-ch="kdTitiSimpan" maxlength="60" placeholder="mis. Sangatta, 1 Desember 2026"></label>
+        </div></div>
       <div class="kd mt">
         <div class="card"><div class="ch"><h3>Isi Kartu</h3><p>Centang data yang dicetak pada kartu.</p></div>
           ${L.fields.map(f => `<label class="kd-fld chk"><input type="checkbox" data-ch="kdField" data-k="${f.k}" ${f.show ? 'checked' : ''}>${esc(FIELD_DEF.find(x => x[0] === f.k)[1])}</label>`).join('')}
@@ -220,14 +234,16 @@ function kdProps() {
   const el = $('#kd-props'); if (!el) return;
   const id = KD.sel, o = id && kdObj(id), L = KD.t.L;
   if (!o) { el.innerHTML = `<div class="ch"><h3>Properti Elemen</h3></div><div class="note">${ic('info')}<span>Klik salah satu elemen pada kartu untuk mengatur posisi, ukuran, dan hurufnya.</span></div>
-    <div style="margin-top:16px">${fld('Lebar kolom label (mm)', 'labelW', L.labelW, 'data-on="kdLabelW" min="5" max="60" step="0.5"', 'number', 'Jarak dari label ke tanda titik dua.')}</div>`; return; }
+    <div style="margin-top:16px">${fld('Lebar kolom label (mm)', 'labelW', L.labelW, 'data-on="kdLabelW" min="5" max="60" step="0.5"', 'number', 'Jarak dari label ke tanda titik dua.')}
+    ${L.showBg ? fld('Kepekatan latar kartu (%)', 'bgOp', Math.round(L.bgOp * 100), 'data-on="kdPersen" min="5" max="100" step="5"', 'number', 'Turunkan agar tulisan tetap mudah dibaca.') : ''}</div>`; return; }
   const isF = id.startsWith('f:'), num = (k, label, step = .5) => fld(label, k, o[k], `data-on="kdProp" step="${step}" min="0"`, 'number');
   el.innerHTML = `<div class="ch"><h3>Properti Elemen</h3><span class="bdg pr">${esc(isF ? o.label : EL_NAMA[id])}</span></div>
     <div class="f2">${num('x', 'Posisi X (mm)')}${num('y', 'Posisi Y (mm)')}</div>
     <div class="f2">${num('w', 'Lebar (mm)')}${o.h != null ? num('h', 'Tinggi (mm)') : o.fs != null ? num('fs', 'Ukuran huruf (pt)', .1) : ''}</div>
     ${isF ? fld('Teks label', 'label', o.label, 'data-on="kdProp" maxlength="30"') + `<label class="chk" style="margin-bottom:14px"><input type="checkbox" data-ch="kdBold" ${o.b ? 'checked' : ''}> Cetak tebal</label>` : ''}
     ${id === 'kop' ? fld('Skala kop', 'kopScale', L.kopScale, 'data-on="kdKopScale" min="0.2" max="1.2" step="0.01"', 'number', 'Memperbesar/memperkecil huruf dan logo kop di kartu.') : ''}
-    ${id === 'ttd' ? `<div class="note">${ic('info')}<span>Nama kepala sekolah, NIP, titimangsa, dan gambar tanda tangan diatur di menu Pengaturan Tampilan.</span></div>` : ''}`;
+    ${id === 'stempel' ? fld('Kepekatan stempel (%)', 'stempelOp', Math.round(L.stempelOp * 100), 'data-on="kdPersen" min="10" max="100" step="5"', 'number') + `<div class="note">${ic('info')}<span>Stempel berada di lapisan bawah. Bila tertutup tanda tangan, klik bagian stempel yang tidak tertutup.</span></div>` : ''}
+    ${id === 'ttd' ? `<div class="note">${ic('info')}<span>Tempat & tanggal diisi di kotak di atas kanvas. Nama kepala sekolah, jenis nomor (NIP/NIY/NUPTK), dan gambar tanda tangan diatur di menu Pengaturan Tampilan.</span></div>` : ''}`;
 }
 function kdBind() {
   const cv = $('#kd-cv'), snap = v => Math.round(v * 2) / 2;
@@ -251,10 +267,22 @@ On.kdProp = t => kdUbah(() => { const o = kdObj(KD.sel); if (o) o[t.name] = t.ty
 On.kdBold = t => kdUbah(() => { kdObj(KD.sel).b = t.checked ? 1 : 0; });
 On.kdKopScale = t => kdUbah((x, L) => { L.kopScale = clamp(+t.value || .5, .2, 1.2); });
 On.kdLabelW = t => kdUbah((x, L) => { L.labelW = clamp(+t.value || 20, 5, 60); });
+On.kdPersen = t => kdUbah((x, L) => { L[t.name] = clamp((+t.value || 100) / 100, .05, 1); });
+On.kdTiti = t => { DB.set.titimangsa = t.value; kdCanvas(); kdSheet(); };
+On.kdTitiSimpan = t => Data.set({ titimangsa: t.value.trim() });
+Act.kdAset = async t => {
+  const k = t.dataset.k, [f] = await pickFiles('image/png,image/jpeg,image/webp'); if (!f) return;
+  try {
+    simpanAset(k, k === 'stempel' ? await resizeImage(f, { max: 500, type: 'image/png' }) : await resizeImage(f, { max: 1400, q: .82 }));
+    KD.t.L[k === 'stempel' ? 'showStempel' : 'showBg'] = true; KD.dirty = true; rerender();
+    toast((k === 'stempel' ? 'Stempel' : 'Latar kartu') + ' dipasang. Klik Simpan Templat agar tampil saat cetak.', 'ok');
+  } catch (e) { toast(e.message, 'er'); }
+};
+Act.kdAsetHapus = t => { simpanAset(t.dataset.k, ''); rerender(); };
 On.kdTeks = t => kdUbah((x, L) => { L[t.name] = t.value; });
 On.kdNama = t => { KD.t.L.nama = t.value; KD.dirty = true; };
 On.kdUkur = t => kdUbah((x, L) => { L[t.name] = clamp(+t.value || 0, t.name === 'margin' ? 3 : 0, 25); tataUlang(x); }, true);
-On.kdSw = t => kdUbah((x, L) => { L[t.dataset.k] = t.checked; tataUlang(x); }, true);
+On.kdSw = t => kdUbah((x, L) => { const k = t.dataset.k; L[k] = t.checked; if (k !== 'showBg' && k !== 'showStempel') tataUlang(x); }, true);
 On.kdField = t => kdUbah((x, L) => { L.fields.find(f => f.k === t.dataset.k).show = t.checked; tataUlang(x); }, true);
 Act.kdGrid = t => kdUbah(x => { const k = t.dataset.k; x[k] = clamp(x[k] + +t.dataset.d, 1, k === 'cols' ? 4 : 8); tataUlang(x); }, true);
 Act.kdKertas = t => kdUbah(x => { x.kertas = t.dataset.v; tataUlang(x); }, true);
@@ -286,13 +314,14 @@ Pages.tampilan = {
             <button class="btn" style="border:0;color:#fff;border-radius:99px;background:linear-gradient(90deg,var(--p),var(--s))">Masuk</button><span class="chip">Menu aktif</span><span class="bdg se">Aksen</span></div>
         </div>
         <div class="card"><div class="ch"><h3>Latar Halaman Login</h3><span class="grow"></span><span class="chip ${adaBg ? 'chip-ok' : 'plain'}">${adaBg ? 'Gambar terpasang' : 'Latar bawaan'}</span><p>JPG, PNG, atau WebP maksimal 2 MB. Gambar diperkecil dan dikompres otomatis sebelum disimpan.</p></div>
-          <div class="mini-login" style="${adaBg ? `background-image:linear-gradient(rgba(10,6,24,.5),rgba(10,6,24,.5)),url('${bg.data}')` : ''}"><div><h4>Selamat<br>Datang!</h4><small>${esc(s.namaSekolah || '')}</small></div><div class="mc">Masuk<i></i><i></i><u></u></div></div>
+          <div class="mini-login" style="${adaBg ? `background-image:linear-gradient(rgba(10,6,24,.5),rgba(10,6,24,.5)),url('${bg.data}')` : ''}"><div><h4>Selamat<br>Datang!</h4><small>${esc(namaSekolah())}</small></div><div class="mc">Masuk<i></i><i></i><u></u></div></div>
           <div class="drop" id="bg-drop" style="margin-top:14px">${ic('upload')}<div style="margin:6px 0 10px">Seret gambar ke sini atau</div>
             <div class="row" style="justify-content:center"><button class="btn sm pri" data-act="bgPilih">${ic('image')} ${adaBg ? 'Ganti Gambar' : 'Pilih Gambar'}</button>${adaBg ? `<button class="btn sm dan" data-act="bgHapus">${ic('trash')} Hapus</button>` : ''}</div></div>
         </div>
         <form class="card" id="f-ident"><div class="ch"><h3>Identitas untuk Dokumen</h3><p>Dipakai pada kartu, daftar hadir, dan berita acara.</p></div>
           <div class="f2">${fld('Tahun Ajaran', 'tahunAjaran', s.tahunAjaran || '', 'maxlength="12" placeholder="2025/2026"')}${sel('Semester', 'semester', ['Ganjil', 'Genap'], s.semester || 'Ganjil')}</div>
-          <div class="f2">${fld('Nama Kepala Sekolah', 'kepsek', s.kepsek || '', 'maxlength="70"')}${fld('NIP / NUPTK', 'nipKepsek', s.nipKepsek || '', 'maxlength="40"', 'text', 'Angka saja dicetak dengan awalan "NIP."')}</div>
+          <div class="f2">${fld('Nama Kepala Sekolah', 'kepsek', s.kepsek || '', 'maxlength="70"')}${fld('Nomor identitas', 'nipKepsek', s.nipKepsek || '', 'maxlength="40"')}</div>
+          ${sel('Yang ditampilkan di bawah nama kepala sekolah', 'jenisId', [['NIP', 'NIP'], ['NIY', 'NIY'], ['NUPTK', 'NUPTK'], ['', 'Dikosongkan (tidak ditampilkan)']], s.jenisId == null ? 'NIP' : s.jenisId)}
           ${fld('Tempat & tanggal pada tanda tangan', 'titimangsa', s.titimangsa || '', 'maxlength="60" placeholder="Sangatta, 1 Desember 2025"')}
           <div class="logo-box" style="margin-bottom:16px"><span class="th" style="width:96px">${DB.assets.ttd ? `<img alt="" src="${DB.assets.ttd}">` : ic('edit')}</span><div><b>Tanda tangan kepala sekolah</b><div class="mu" style="font-size:12px;margin-bottom:6px">PNG latar transparan paling baik.</div>
             <button type="button" class="btn sm" data-act="ttdPilih">${ic('upload')} ${DB.assets.ttd ? 'Ganti' : 'Unggah'}</button>${DB.assets.ttd ? `<button type="button" class="ib dan" data-act="ttdHapus" aria-label="Hapus tanda tangan">${ic('trash')}</button>` : ''}</div></div>
