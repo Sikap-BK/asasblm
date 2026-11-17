@@ -108,6 +108,20 @@ svg.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor
 #pages { padding: 24px 32px 48px; }
 .only-m { display: none !important; }
 #side-bg { display: none; }
+/* Desktop: menu samping hanya ikon; melebar & menampilkan tulisan saat kursor mendekat */
+@media (min-width: 1024px) {
+  #side { width: 68px; overflow: hidden; transition: width .16s ease, box-shadow .16s ease; }
+  #main { margin-left: 68px; }
+  #side .sd-brand { padding: 0 16px; }
+  #side .sd-brand > span:last-child, #nav a span, .sd-out span { opacity: 0; white-space: nowrap; transition: opacity .12s; }
+  #nav a { white-space: nowrap; }
+  .sd-out { padding: 0 24px; white-space: nowrap; }
+  #side .sd-install { display: none; white-space: nowrap; }
+  #side:hover, #side:has(:focus-visible) { width: 240px; box-shadow: 8px 0 24px -10px rgba(15,23,42,.22); }
+  #side:hover .sd-brand > span:last-child, #side:hover #nav a span, #side:hover .sd-out span,
+  #side:has(:focus-visible) .sd-brand > span:last-child, #side:has(:focus-visible) #nav a span, #side:has(:focus-visible) .sd-out span { opacity: 1; }
+  #side:hover .sd-install:not([hidden]), #side:has(:focus-visible) .sd-install:not([hidden]) { display: block; }
+}
 @media (max-width: 1023px) {
   #side { transform: translateX(-100%); transition: transform .2s; box-shadow: var(--sh-2); }
   .menu-open #side { transform: none; }

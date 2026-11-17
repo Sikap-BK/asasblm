@@ -294,6 +294,7 @@ Pages.ruang = {
             ${belum && DB.peserta.length ? `<button class="btn" data-act="rgSisa">${ic('plus')} Bagikan ${belum} Sisanya</button>` : ''}</div>
         </div>
       </div>
+      ${kelasRuangHTML(rooms)}
       <div class="card flush mt">
         <div class="tools"><h3 style="font-size:16px">Peserta per Ruang</h3><div class="srch">${ic('search')}<input class="in" placeholder="Cari nama atau nomor ujian…" value="${esc(St.ruang.q)}" data-on="pesCari" aria-label="Cari peserta"></div>
           <select class="in" data-ch="pesFilter" aria-label="Filter ruang">${opts(rooms.map(r => [r.id, r.nama]), St.ruang.fr, 'Semua Ruang')}</select></div>
@@ -343,6 +344,53 @@ Act.rgBanyak = () => modal({
 });
 Act.rgBagi = () => DB.peserta.length ? confirmBox('Pembagian ruang dan semua nomor ujian yang ada akan dibuat ulang dari awal.', () => bagiPeserta(false), 'Bagi ulang') : bagiPeserta(false);
 Act.rgSisa = () => bagiPeserta(true);
+
+/* ---------- Bagi manual per kelas: satu kelas langsung ke satu ruang ---------- */
+St.kr = {};                                                         // pilihan sementara: kelas → id ruang
+St.krNomor = true;
+/** Ruang sebuah kelas saat ini: id ruang bila seluruh siswanya di ruang yang sama, '' bila belum/tersebar. */
+function ruangKelas(kelas) {
+  const ix = IX(), set = new Set(DB.siswa.filter(s => s.kelas === kelas).map(s => (ix.pes.get(s.nisn) || {}).idRuang || ''));
+  return set.size === 1 ? [...set][0] : '';
+}
+function kelasRuangHTML(rooms) {
+  const kelas = daftarKelas(); if (!kelas.length || !rooms.length) return '';
+  const ix = IX();
+  return `<div class="card mt"><div class="ch"><h3>Bagi Manual per Kelas</h3><span class="grow"></span>
+      <label class="chk" style="font-size:13px"><input type="checkbox" data-ch="krNomor" ${St.krNomor ? 'checked' : ''}> Buat ulang nomor ujian (urut ruang, lalu nama)</label>
+      <button class="btn pri" data-act="krTerapkan">${ic('check')} Terapkan</button>
+      <p>Pilih ruang untuk tiap kelas — seluruh siswa kelas itu langsung masuk ke ruang yang dipilih. Kelas yang dibiarkan "Tidak diubah" tetap seperti sekarang.</p></div>
+    <div class="g g4" style="gap:12px">${kelas.map(k => {
+      const n = DB.siswa.filter(s => s.kelas === k).length, kini = ruangKelas(k), pilih = St.kr[k] != null ? St.kr[k] : kini;
+      const tersebar = !kini && DB.siswa.some(s => s.kelas === k && ix.pes.has(s.nisn));
+      return `<label class="fld" style="margin:0;padding:12px;border-radius:8px;background:var(--bg)"><span style="display:flex;justify-content:space-between"><b style="color:var(--tx);font-size:14px">${esc(k)}</b><span>${n} siswa${tersebar ? ' · tersebar' : ''}</span></span>
+        <select class="in" data-ch="krPilih" data-k="${esc(k)}" aria-label="Ruang untuk kelas ${esc(k)}">${opts(rooms.map(r => [r.id, r.nama]), pilih, kini ? null : 'Tidak diubah')}</select></label>`;
+    }).join('')}</div></div>`;
+}
+On.krPilih = t => { St.kr[t.dataset.k] = t.value; };
+On.krNomor = t => { St.krNomor = t.checked; };
+Act.krTerapkan = () => {
+  const ix = IX(), ubah = {};
+  daftarKelas().forEach(k => { const v = St.kr[k]; if (v && ix.ruang.has(v) && v !== ruangKelas(k)) ubah[k] = v; });
+  const nKelas = Object.keys(ubah).length;
+  if (!nKelas && !(St.krNomor && DB.peserta.length)) { toast('Belum ada kelas yang ruangnya diubah.', 'er'); return; }
+  fmtNo();
+  const pes = DB.peserta.map(p => Object.assign({}, p)), by = new Map(pes.map(p => [p.nisn, p]));
+  let maks = 0; pes.forEach(p => { const m = /(\d+)\D*$/.exec(p.noUjian); if (m) maks = Math.max(maks, +m[1]); });
+  DB.siswa.filter(s => ubah[s.kelas]).sort((a, b) => cmpKelas(a.kelas, b.kelas) || nat(a.nama, b.nama)).forEach(s => {
+    const p = by.get(s.nisn);
+    if (p) p.idRuang = ubah[s.kelas]; else { const baru = { nisn: s.nisn, noUjian: buatNo(++maks), idRuang: ubah[s.kelas], noUrut: '' }; pes.push(baru); by.set(s.nisn, baru); }
+  });
+  if (St.krNomor) {                                                 // nomor ujian berurutan per ruang → kelas → nama
+    const nm = id => (ix.ruang.get(id) || {}).nama || '', sis = n => ix.sis.get(n) || { kelas: '', nama: '' };
+    pes.sort((a, b) => nat(nm(a.idRuang), nm(b.idRuang)) || cmpKelas(sis(a.nisn).kelas, sis(b.nisn).kelas) || nat(sis(a.nisn).nama, sis(b.nisn).nama)).forEach((p, i) => p.noUjian = buatNo(i + 1));
+  }
+  Data.set({ fmtNo: Object.assign({}, St.fmt) }); Data.replace('peserta', urutkanUlang(pes)); St.kr = {}; rerender();
+  const isi = new Map(); pes.forEach(p => isi.set(p.idRuang, (isi.get(p.idRuang) || 0) + 1));
+  const lebih = DB.ruang.filter(r => (isi.get(r.id) || 0) > (+r.kapasitas || 0)).map(r => `${r.nama} (${isi.get(r.id)}/${r.kapasitas})`);
+  toast(nKelas ? `${nKelas} kelas dipindahkan ke ruang pilihan.` : 'Nomor ujian dibuat ulang.', 'ok', 'Pembagian per kelas');
+  if (lebih.length) toast('Melebihi kapasitas: ' + lebih.join(', ') + '. Naikkan kapasitas ruang bila memang disengaja.', '', 'Perhatian');
+};
 
 /* ================= JADWAL SESI ================= */
 Pages.sesi = {

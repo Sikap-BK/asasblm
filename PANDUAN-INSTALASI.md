@@ -131,7 +131,7 @@ git push
 
 Bila tampilan masih lama, tekan **Ctrl+Shift+R**.
 
-> Karena aplikasi bisa diinstal, berkas disimpan di perangkat. Setiap kali Anda sendiri mengubah berkas frontend (termasuk `js/config.js`), naikkan angka versi di baris `const VERSION = 'asas-v1.1.1';` pada `sw.js` (mis. menjadi `asas-v1.1.2`) sebelum `git push`, supaya perangkat mengambil berkas baru.
+> Karena aplikasi bisa diinstal, berkas disimpan di perangkat. Setiap kali Anda sendiri mengubah berkas frontend (termasuk `js/config.js`), naikkan angka versi di baris `const VERSION = 'asas-v1.1.2';` pada `sw.js` (mis. menjadi `asas-v1.1.3`) sebelum `git push`, supaya perangkat mengambil berkas baru.
 
 **Backend** (setelah mengubah `Kode.gs`): **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**.
 Jangan pilih *New deployment* — itu membuat URL `/exec` baru dan aplikasi berhenti tersambung.
