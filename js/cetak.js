@@ -10,7 +10,61 @@ function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.ceta
 const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek, sebutan: Ck.sebutan } });
 /** Kotak tanda tangan pengawas. Dua pengawas bila dipilih 2 atau Pengawas 2 pada jadwal terisi. */
 const duaPengawas = x => Ck.nPengawas === 2 || !!x.pengawas2;
-const kotakTtd = (atas, nama) => `<div>${atas}<div class="sp"></div>${nama ? '<u><b>' + esc(nama) + '</b></u>' : '(' + titik(40) + ')'}</div>`;
+/** Nama penanda tangan selalu satu baris (huruf mengecil bila terlalu panjang). */
+const namaTtd = nama => nama ? '<u><b>' + baris1(nama, 12, 88, FONT_DOK, true) + '</b></u>' : '(' + titik(40) + ')';
+const kotakTtd = (atas, nama) => `<div>${atas}<div class="sp"></div>${namaTtd(nama)}</div>`;
+/** Atur dokumen agar tanda tangan tidak pernah tercetak sendirian di halaman baru.
+    1) Usahakan muat 1 halaman: tinggi baris tabel dicari yang terbesar tetapi masih muat, bila perlu huruf tabel dipadatkan.
+    2) Bila memang terlalu banyak, aplikasi sendiri yang menentukan titik pindah halaman sehingga halaman terakhir
+       selalu berisi minimal 3 baris tabel bersama tanda tangan.  Semua diukur sungguhan dalam milimeter. */
+let _ukur;
+function pasHalaman(html, paper) {
+  const [pw, ph] = PAPER[paper] || PAPER.A4, H = ph - 24 - 2.5;     // margin atas+bawah 12 mm, cadangan 2,5 mm
+  if (!_ukur) { _ukur = document.createElement('div'); _ukur.setAttribute('aria-hidden', 'true'); _ukur.style.cssText = 'position:absolute;left:-10000px;top:0;visibility:hidden;pointer-events:none'; document.body.appendChild(_ukur); }
+  _ukur.style.width = (pw - 30) + 'mm'; _ukur.innerHTML = html;
+  const doc = _ukur.firstElementChild; if (!doc) return html;
+  const tinggi = () => doc.getBoundingClientRect().height / MM;
+  if (tinggi() <= H) return html;                                   // sudah muat
+  const tabel = doc.querySelector('table.grid'), rows = tabel ? [...tabel.tBodies[0].rows] : [];
+  const rh0 = parseFloat(doc.style.getPropertyValue('--rh')) || 0;
+  for (const tingkat of ['', 'rapat', 'rapat rapat2']) {            // 1) makin padat: huruf tabel & jarak mengecil
+    doc.className = 'doc ' + tingkat;
+    if (rows.length && rh0) {
+      doc.style.setProperty('--rh', '0mm');
+      if (tinggi() > H) continue;
+      let lo = 0, hi = rh0;
+      for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; doc.style.setProperty('--rh', m + 'mm'); if (tinggi() <= H) lo = m; else hi = m; }
+      doc.style.setProperty('--rh', Math.floor(lo * 10) / 10 + 'mm');
+      return _ukur.innerHTML;
+    }
+    if (tinggi() <= H) return _ukur.innerHTML;
+  }
+  if (rows.length < 6) return html;
+  // 2) lebih dari 1 halaman: tata letak normal, hitung sendiri pembagian baris per halaman
+  doc.className = 'doc'; doc.style.setProperty('--rh', rh0 + 'mm');
+  const atas = doc.getBoundingClientRect().top, mm = y => (y - atas) / MM;
+  const kepalaTabel = tabel.tHead ? tabel.tHead.getBoundingClientRect().height / MM : 0;
+  const ekor = tinggi() - mm(rows[rows.length - 1].getBoundingClientRect().bottom);   // tanda tangan & isi setelah tabel
+  const pecah = []; let awal = 0;                                   // indeks baris pertama tiap halaman baru
+  rows.forEach((r, i) => { const b = r.getBoundingClientRect(); if (mm(b.bottom) - awal > H) { pecah.push(i); awal = mm(b.top) - kepalaTabel; } });
+  const n = rows.length, mulaiAkhir = pecah.length ? pecah[pecah.length - 1] : 0;
+  const isiAkhir = mm(rows[n - 1].getBoundingClientRect().bottom) - awal;
+  if (isiAkhir + ekor > H || n - mulaiAkhir < 3) {                  // tanda tangan akan sendirian / baris terakhir terlalu sedikit
+    const k = n - 3, akhir = pecah[pecah.length - 1];
+    if (akhir != null && akhir > k) pecah[pecah.length - 1] = k;   // majukan titik pindah agar 3 baris ikut ke halaman terakhir
+    else if (akhir == null || akhir < k) pecah.push(k);             // halaman baru: 3 baris terakhir + tanda tangan
+  }
+  // pecah tabel menjadi beberapa tabel; tiap halaman lanjutan diberi kepala tabel lagi
+  let sebelum = tabel; const titik = [...new Set(pecah)].sort((a, b) => a - b);
+  titik.forEach((mulai, x) => {
+    const sampai = titik[x + 1] || n, t = tabel.cloneNode(false);
+    if (tabel.tHead) t.appendChild(tabel.tHead.cloneNode(true));
+    const tb = document.createElement('tbody'); rows.slice(mulai, sampai).forEach(r => tb.appendChild(r)); t.appendChild(tb);
+    const brk = document.createElement('div'); brk.className = 'brk';
+    sebelum.after(brk); brk.after(t); sebelum = t;
+  });
+  return _ukur.innerHTML;
+}
 const DOC_MARGIN = '12mm 15mm';
 
 /* ---------- sumber data ---------- */
@@ -45,9 +99,9 @@ function dokInfo(x) {
 function daftarHadirHTML(x) {
   const list = pesertaRuang(x.idRuang), ph = PAPER[Ck.kertas][1], dua = duaPengawas(x);
   const tinggi = r1(clamp((ph - (dua ? 196 : 172)) / Math.max(list.length, 1), 5.6, 9.5));         // tinggi baris menyesuaikan jumlah peserta
-  return `<div class="doc">${dokKepala('DAFTAR HADIR PESERTA')}${dokInfo(x)}
+  return `<div class="doc" style="--rh:${tinggi}mm">${dokKepala('DAFTAR HADIR PESERTA')}${dokInfo(x)}
     <table class="grid" style="margin-top:4mm"><thead><tr><th style="width:10mm">No</th><th style="width:34mm">No Ujian</th><th>Nama</th><th style="width:20mm">Kelas</th><th style="width:48mm">Tanda Tangan</th></tr></thead><tbody>
-    ${list.map((y, i) => `<tr style="height:${tinggi}mm"><td style="text-align:center">${i + 1}</td><td style="text-align:center">${esc(y.p.noUjian)}</td><td>${esc(y.s.nama)}</td><td style="text-align:center">${esc(y.s.kelas)}</td><td style="padding-left:${i % 2 ? 24 : 2}mm">${i + 1}.</td></tr>`).join('')
+    ${list.map((y, i) => `<tr style="height:var(--rh)"><td style="text-align:center">${i + 1}</td><td style="text-align:center">${esc(y.p.noUjian)}</td><td>${baris1(y.s.nama, 11, 63, FONT_DOK)}</td><td style="text-align:center">${esc(y.s.kelas)}</td><td style="padding-left:${i % 2 ? 24 : 2}mm">${i + 1}.</td></tr>`).join('')
       || '<tr><td colspan="5" style="text-align:center;height:20mm">Belum ada peserta di ruang ini.</td></tr>'}
     </tbody></table>
     <div class="sgn"><div><table class="inf"><tr><td>Jumlah peserta</td><td>:</td><td>${list.length} orang</td></tr><tr><td>Hadir</td><td>:</td><td>${esc(x.hadir) || titik(8)} orang</td></tr><tr><td>Tidak hadir</td><td>:</td><td>${esc(x.tidakHadir) || titik(8)} orang</td></tr></table></div>
@@ -59,7 +113,7 @@ function beritaAcaraHTML(x) {
   const [m1, m2] = (x.jam || '').split(/\s*-\s*/);
   const dua = duaPengawas(x), titi = esc(s.titimangsa || titik(40));
   // Tanda tangan kepala sekolah di berita acara selalu dikosongkan (ditandatangani basah), hanya nama & nomor.
-  const kepsek = `<div>Mengetahui,<br>Kepala Sekolah,<div class="sp"></div>${s.kepsek ? '<u><b>' + esc(s.kepsek) + '</b></u>' : '(' + titik(40) + ')'}${idKepsek() ? '<br>' + esc(idKepsek()) : ''}</div>`;
+  const kepsek = `<div>Mengetahui,<br>Kepala Sekolah,<div class="sp"></div>${namaTtd(s.kepsek)}${idKepsek() ? '<br>' + esc(idKepsek()) : ''}</div>`;
   const baris = [['Sekolah', esc(namaSekolah()) || titik(50)], ['Ruang', r.nama || ''], ['Jumlah peserta seharusnya', n + ' orang'], ['Jumlah hadir', (esc(x.hadir) || titik(10)) + ' orang'], ['Jumlah tidak hadir', (esc(x.tidakHadir) || titik(10)) + ' orang'], ['Nomor peserta tidak hadir', titik(60)]];
   return `<div class="doc">${dokKepala('BERITA ACARA PELAKSANAAN')}
     <p style="text-align:justify;margin-top:5mm;line-height:1.7">Pada hari ini ${d ? '<b>' + HARI[d.getDay()] + '</b> tanggal <b>' + d.getDate() + ' ' + BLN[d.getMonth()] + ' ' + d.getFullYear() + '</b>' : titik(20) + ' tanggal ' + titik(30)},
@@ -82,12 +136,12 @@ function terimaHTML(kelas) {
   const list = DB.siswa.filter(x => x.kelas === kelas).map(x => ({ s: x, p: ix.pes.get(x.nisn) || {} }))
     .sort((a, b) => nat(a.p.noUjian || '￿', b.p.noUjian || '￿') || nat(a.s.nama, b.s.nama));
   const tinggi = r1(clamp((ph - 182) / Math.max(list.length, 1), 6.2, 10));   // tinggi baris menyesuaikan jumlah siswa
-  return `<div class="doc">${dokKepala('DAFTAR TERIMA KARTU PESERTA')}
+  return `<div class="doc" style="--rh:${tinggi}mm">${dokKepala('DAFTAR TERIMA KARTU PESERTA')}
     <table class="inf"><tr><td>Kelas</td><td>:</td><td>${esc(kelas)}</td></tr><tr><td>${sebut}</td><td>:</td><td>${esc(w.nama) || titik(50)}</td></tr><tr><td>Jumlah siswa</td><td>:</td><td>${list.length} orang</td></tr></table>
     <table class="grid" style="margin-top:4mm"><thead><tr><th style="width:10mm">No</th><th>Nama</th><th style="width:32mm">No. Peserta</th><th style="width:28mm">Tgl Ambil</th><th style="width:44mm">Tanda Tangan</th></tr></thead><tbody>
-    ${list.map((y, i) => `<tr style="height:${tinggi}mm"><td style="text-align:center">${i + 1}</td><td>${esc(y.s.nama)}</td><td style="text-align:center">${esc(y.p.noUjian || '')}</td><td></td><td style="padding-left:${i % 2 ? 22 : 2}mm">${i + 1}.</td></tr>`).join('')}
+    ${list.map((y, i) => `<tr style="height:var(--rh)"><td style="text-align:center">${i + 1}</td><td>${baris1(y.s.nama, 11, 61, FONT_DOK)}</td><td style="text-align:center">${esc(y.p.noUjian || '')}</td><td></td><td style="padding-left:${i % 2 ? 22 : 2}mm">${i + 1}.</td></tr>`).join('')}
     </tbody></table>
-    <div class="sgn"><div></div><div>${esc(s.titimangsa || titik(40))}<br>${sebut} ${esc(kelas)},<div class="sp"></div>${w.nama ? '<u><b>' + esc(w.nama) + '</b></u>' : '(' + titik(40) + ')'}${idOrang(w) ? '<br>' + esc(idOrang(w)) : ''}</div></div></div>`;
+    <div class="sgn"><div></div><div>${esc(s.titimangsa || titik(40))}<br>${sebut} ${esc(kelas)},<div class="sp"></div>${namaTtd(w.nama)}${idOrang(w) ? '<br>' + esc(idOrang(w)) : ''}</div></div></div>`;
 }
 /** Isian data wali / guru kelas — satu baris per kelas, disimpan di Pengaturan. */
 Act.waliAtur = () => {
@@ -167,12 +221,12 @@ function ckPreview() {
   } else if (Ck.tab === 'terima') {
     const [pw, ph] = PAPER[Ck.kertas], k = ckTerima()[0];
     p.style.cssText = `width:${pw}mm;min-height:${ph}mm;padding:${DOC_MARGIN}`;
-    p.innerHTML = k ? terimaHTML(k) : emptyBox('Belum ada data siswa');
+    p.innerHTML = k ? pasHalaman(terimaHTML(k), Ck.kertas) : emptyBox('Belum ada data siswa');
     cetakFit();
   } else {
     const [pw, ph] = PAPER[Ck.kertas], x = ckSesi()[0];
     p.style.cssText = `width:${pw}mm;min-height:${ph}mm;padding:${DOC_MARGIN}`;
-    p.innerHTML = x ? (Ck.tab === 'hadir' ? daftarHadirHTML(x) : beritaAcaraHTML(x)) : emptyBox('Tidak ada sesi yang cocok', 'Ubah filter atau tambahkan ruang / jadwal sesi.');
+    p.innerHTML = x ? pasHalaman(Ck.tab === 'hadir' ? daftarHadirHTML(x) : beritaAcaraHTML(x), Ck.kertas) : emptyBox('Tidak ada sesi yang cocok', 'Ubah filter atau tambahkan ruang / jadwal sesi.');
     cetakFit();
   }
 }
@@ -186,8 +240,8 @@ Act.ckPengawas = t => { Ck.nPengawas = +t.dataset.v; ckSimpan(); rerender(); };
 On.ckKepsek = t => { Ck.baKepsek = t.checked; ckSimpan(); rerender(); };
 On.ckSet = t => { Ck[t.name] = t.value; if (t.name === 'tgl') Ck.mapel = ''; rerender(); };
 Act.ckCetak = async t => {
-  if (Ck.tab === 'terima') { printDoc(ckTerima().map(terimaHTML), Ck.kertas, DOC_MARGIN); return; }
-  if (Ck.tab !== 'kartu') { const list = ckSesi(); printDoc(list.map(Ck.tab === 'hadir' ? daftarHadirHTML : beritaAcaraHTML), Ck.kertas, DOC_MARGIN); return; }
+  if (Ck.tab === 'terima') { printDoc(ckTerima().map(k => pasHalaman(terimaHTML(k), Ck.kertas)), Ck.kertas, DOC_MARGIN); return; }
+  if (Ck.tab !== 'kartu') { const list = ckSesi(); printDoc(list.map(x => pasHalaman((Ck.tab === 'hadir' ? daftarHadirHTML : beritaAcaraHTML)(x), Ck.kertas)), Ck.kertas, DOC_MARGIN); return; }
   const tpl = ckTemplat(), list = ckSiswa(), per = tpl.cols * tpl.rows, pages = [];
   if (tpl.L.showFoto) {                                             // muat foto yang belum ada di perangkat (per 20)
     t.disabled = true; const label = t.innerHTML;

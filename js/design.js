@@ -3,6 +3,16 @@
    ============================================================ */
 'use strict';
 const MM = 96 / 25.4;                                               // piksel layar per milimeter
+const FONT_DOK = '"Times New Roman", Times, serif', FONT_KARTU = 'Arial, Helvetica, sans-serif';
+const _cv = document.createElement('canvas').getContext('2d');
+/** Ukuran huruf (pt) agar teks muat SATU BARIS di lebar maksMm — huruf mengecil, bukan terlipat. */
+function ptPas(teks, pt, maksMm, keluarga, tebal) {
+  _cv.font = (tebal ? '700 ' : '400 ') + pt + 'pt ' + keluarga;
+  const w = _cv.measureText(String(teks || '')).width / MM * 1.05;
+  return w <= maksMm ? pt : Math.max(pt * .5, Math.floor(pt * maksMm / w * 10) / 10);
+}
+/* ukuran dalam em → ikut mengecil bila dokumen dipadatkan */
+const baris1 = (teks, pt, maksMm, keluarga, tebal) => { const f = ptPas(teks, pt, maksMm, keluarga, tebal); return `<span class="nw1"${f < pt ? ` style="font-size:${Math.floor(f / pt * 1000) / 1000}em"` : ''}>${esc(teks)}</span>`; };
 const r2 = v => Math.round(v * 100) / 100;
 const clone = o => JSON.parse(JSON.stringify(o));
 /** Sesuaikan skala pratinjau kertas dengan lebar wadahnya. */
@@ -158,9 +168,9 @@ function cardHTML(t, s, design) {
   if (L.showStempel) h += E('stempel', pos(L.el.stempel) + `width:${L.el.stempel.w}mm;opacity:${L.stempelOp}`, 'k-stempel' + (A.stempel || !design ? '' : ' kosong'), A.stempel ? `<img alt="" src="${blobUrl(A.stempel)}">` : (design ? 'STEMPEL' : ''));   // di bawah tulisan & tanda tangan
   if (L.showKop) h += E('kop', pos(L.el.kop) + `width:${L.el.kop.w}mm`, '', kopHTML(L.kopScale));
   h += E('judul', pos(L.el.judul) + `width:${L.el.judul.w}mm;font-size:${L.el.judul.fs}pt`, 'k-judul', esc(L.judul) + (sub ? `<small>${esc(sub)}</small>` : ''));
-  fieldTampil(L).forEach(f => { h += E('f:' + f.k, pos(f) + `width:${f.w}mm;font-size:${f.fs}pt;${f.b ? 'font-weight:700' : ''}`, 'k-f', `<span style="width:${L.labelW}mm">${esc(f.label)}</span><i>:</i><span>${esc(f.gabung ? val.nis + ' / ' + val.nisn : val[f.k])}</span>`); });
+  fieldTampil(L).forEach(f => { h += E('f:' + f.k, pos(f) + `width:${f.w}mm;font-size:${f.fs}pt;${f.b ? 'font-weight:700' : ''}`, 'k-f', `<span style="width:${L.labelW}mm">${esc(f.label)}</span><i>:</i><span>${baris1(f.gabung ? val.nis + ' / ' + val.nisn : val[f.k], f.fs, f.w - L.labelW - f.fs * .3528 * 1.6 - .5, FONT_KARTU, f.b)}</span>`); });
   if (L.showFoto) { const src = Foto.src(s); h += E('foto', pos(L.el.foto) + `width:${L.el.foto.w}mm;height:${L.el.foto.h}mm`, 'k-foto', src ? `<img alt="" src="${src}">` : '<span>FOTO<br>3 × 4</span>'); }
-  if (L.showTtd) h += E('ttd', pos(L.el.ttd) + `width:${L.el.ttd.w}mm;font-size:${L.el.ttd.fs}pt`, 'k-ttd', `<div>${esc(set.titimangsa || (design ? '(tempat, tanggal)' : ''))}&nbsp;</div><div>Kepala Sekolah,</div><div class="sig">${A.ttd ? `<img alt="" src="${blobUrl(A.ttd)}">` : ''}</div><div><u>${esc(set.kepsek || '..............................')}</u></div><div>${esc(idKepsek())}</div>`);
+  if (L.showTtd) h += E('ttd', pos(L.el.ttd) + `width:${L.el.ttd.w}mm;font-size:${L.el.ttd.fs}pt`, 'k-ttd', `<div>${baris1(set.titimangsa || (design ? '(tempat, tanggal)' : ''), L.el.ttd.fs, L.el.ttd.w, FONT_KARTU)}&nbsp;</div><div>Kepala Sekolah,</div><div class="sig">${A.ttd ? `<img alt="" src="${blobUrl(A.ttd)}">` : ''}</div><div><u>${baris1(set.kepsek || '..............................', L.el.ttd.fs, L.el.ttd.w, FONT_KARTU, true)}</u></div><div>${baris1(idKepsek(), L.el.ttd.fs, L.el.ttd.w, FONT_KARTU)}</div>`);
   return `<div class="kartu ${L.border || 'dashed'}" style="width:${W}mm;height:${H}mm">${h}</div>`;
 }
 /** Satu lembar berisi kolom × baris kartu. */
