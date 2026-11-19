@@ -73,7 +73,7 @@ Pages.siswa = {
     const kpi = (label, val, icon, cls, foot) => `<div class="card"><div class="kpi"><div><small>${label}</small><b>${val}</b></div><span class="ki ${cls}">${ic(icon)}</span></div><div class="kpi-f">${foot}</div></div>`;
     el.innerHTML = `
       <div class="ph"><div><h1>Data Siswa Peserta Ujian</h1><p>Kelola identitas peserta dan pasfoto untuk penerbitan kartu sumatif.</p></div>
-        <div class="acts"><button class="btn" data-act="sisTemplat">${ic('download')} Unduh Templat Excel</button><button class="btn" data-act="sisFoto">${ic('camera')} Unggah Foto</button>
+        <div class="acts"><button class="btn" data-act="sisTemplat">${ic('download')} Unduh Templat Excel</button><button class="btn" data-act="waliAtur">${ic('user')} Wali / Guru Kelas</button><button class="btn" data-act="sisFoto">${ic('camera')} Unggah Foto</button>
           <button class="btn" data-act="sisTambah">${ic('plus')} Tambah</button><button class="btn pri" data-act="sisImpor">${ic('upload')} Impor Excel</button></div></div>
       <div class="g g4">
         ${kpi('TOTAL SISWA', n, 'users', '', `${daftarKelas().length} kelas`)}

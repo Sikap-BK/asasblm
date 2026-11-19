@@ -4,10 +4,10 @@
    "Simpan sebagai PDF" tersedia di dialog yang sama.
    ============================================================ */
 'use strict';
-const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, _muat: false };
+const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, sebutan: 'Wali Kelas', tkKelas: '', _muat: false };
 /** Pilihan cetak (kertas, jumlah pengawas, tanda tangan kepsek) diingat di pengaturan. */
-function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.cetak || {}; if (PAPER[c.kertas]) Ck.kertas = c.kertas; if (c.nPengawas) Ck.nPengawas = +c.nPengawas === 2 ? 2 : 1; if (c.baKepsek != null) Ck.baKepsek = !!c.baKepsek; }
-const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek } });
+function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.cetak || {}; if (PAPER[c.kertas]) Ck.kertas = c.kertas; if (c.nPengawas) Ck.nPengawas = +c.nPengawas === 2 ? 2 : 1; if (c.baKepsek != null) Ck.baKepsek = !!c.baKepsek; if (c.sebutan === 'Guru Kelas') Ck.sebutan = c.sebutan; }
+const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek, sebutan: Ck.sebutan } });
 /** Kotak tanda tangan pengawas. Dua pengawas bila dipilih 2 atau Pengawas 2 pada jadwal terisi. */
 const duaPengawas = x => Ck.nPengawas === 2 || !!x.pengawas2;
 const kotakTtd = (atas, nama) => `<div>${atas}<div class="sp"></div>${nama ? '<u><b>' + esc(nama) + '</b></u>' : '(' + titik(40) + ')'}</div>`;
@@ -73,6 +73,43 @@ function beritaAcaraHTML(x) {
       : `<div class="sgn">${Ck.baKepsek ? kepsek : '<div></div>'}${kotakTtd(titi + '<br>Pengawas,', x.pengawas)}</div>`}</div>`;
 }
 
+/* ================= DAFTAR TERIMA KARTU (per kelas) ================= */
+const waliData = () => DB.set.wali || {};
+const idOrang = w => w && w.jenis && w.no ? w.jenis + '. ' + w.no : '';
+function ckTerima() { const k = daftarKelas(); return Ck.tkKelas && k.includes(Ck.tkKelas) ? [Ck.tkKelas] : k; }
+function terimaHTML(kelas) {
+  const s = DB.set, ix = IX(), w = waliData()[kelas] || {}, sebut = Ck.sebutan, ph = PAPER[Ck.kertas][1];
+  const list = DB.siswa.filter(x => x.kelas === kelas).map(x => ({ s: x, p: ix.pes.get(x.nisn) || {} }))
+    .sort((a, b) => nat(a.p.noUjian || '￿', b.p.noUjian || '￿') || nat(a.s.nama, b.s.nama));
+  const tinggi = r1(clamp((ph - 182) / Math.max(list.length, 1), 6.2, 10));   // tinggi baris menyesuaikan jumlah siswa
+  return `<div class="doc">${dokKepala('DAFTAR TERIMA KARTU PESERTA')}
+    <table class="inf"><tr><td>Kelas</td><td>:</td><td>${esc(kelas)}</td></tr><tr><td>${sebut}</td><td>:</td><td>${esc(w.nama) || titik(50)}</td></tr><tr><td>Jumlah siswa</td><td>:</td><td>${list.length} orang</td></tr></table>
+    <table class="grid" style="margin-top:4mm"><thead><tr><th style="width:10mm">No</th><th>Nama</th><th style="width:32mm">No. Peserta</th><th style="width:28mm">Tgl Ambil</th><th style="width:44mm">Tanda Tangan</th></tr></thead><tbody>
+    ${list.map((y, i) => `<tr style="height:${tinggi}mm"><td style="text-align:center">${i + 1}</td><td>${esc(y.s.nama)}</td><td style="text-align:center">${esc(y.p.noUjian || '')}</td><td></td><td style="padding-left:${i % 2 ? 22 : 2}mm">${i + 1}.</td></tr>`).join('')}
+    </tbody></table>
+    <div class="sgn"><div></div><div>${esc(s.titimangsa || titik(40))}<br>${sebut} ${esc(kelas)},<div class="sp"></div>${w.nama ? '<u><b>' + esc(w.nama) + '</b></u>' : '(' + titik(40) + ')'}${idOrang(w) ? '<br>' + esc(idOrang(w)) : ''}</div></div></div>`;
+}
+/** Isian data wali / guru kelas — satu baris per kelas, disimpan di Pengaturan. */
+Act.waliAtur = () => {
+  const kelas = daftarKelas(), W = waliData();
+  if (!kelas.length) { toast('Belum ada data siswa / kelas.', 'er'); return; }
+  modal({
+    title: 'Data Wali / Guru Kelas', wide: true,
+    body: `<p class="mu" style="margin-bottom:14px">Nama dan nomor identitas ini dicetak pada kolom tanda tangan Daftar Terima Kartu tiap kelas. Kosongkan nomor bila tidak ingin ditampilkan.</p>
+      <div class="tw"><table class="tbl"><thead><tr><th style="width:90px">Kelas</th><th>Nama Wali / Guru Kelas</th><th style="width:130px">Jenis Nomor</th><th style="width:220px">Nomor</th></tr></thead><tbody>
+      ${kelas.map((k, i) => { const w = W[k] || {}; return `<tr><td><span class="bdg pr">${esc(k)}</span></td>
+        <td><input class="in sm" name="nama_${i}" value="${esc(w.nama || '')}" maxlength="70" aria-label="Nama wali kelas ${esc(k)}" placeholder="Nama lengkap & gelar"></td>
+        <td><select class="in sm" name="jenis_${i}" aria-label="Jenis nomor ${esc(k)}">${opts([['NIP', 'NIP'], ['NIY', 'NIY'], ['NUPTK', 'NUPTK'], ['', 'Tidak ditampilkan']], w.jenis == null ? 'NIP' : w.jenis)}</select></td>
+        <td><input class="in sm" name="no_${i}" value="${esc(w.no || '')}" maxlength="40" aria-label="Nomor ${esc(k)}"></td></tr>`; }).join('')}
+      </tbody></table></div>`,
+    onOk(v) {
+      const baru = Object.assign({}, W);                            // data kelas yang sudah tidak ada tetap disimpan
+      kelas.forEach((k, i) => { const w = { nama: (v['nama_' + i] || '').trim(), jenis: v['jenis_' + i] || '', no: (v['no_' + i] || '').trim() }; if (w.nama || w.no) baru[k] = w; else delete baru[k]; });
+      Data.set({ wali: baru }); rerender(); toast('Data wali / guru kelas disimpan.', 'ok');
+    }
+  });
+};
+
 /* ================= HALAMAN CETAK ================= */
 Pages.cetak = {
   title: 'Cetak Dokumen',
@@ -90,6 +127,14 @@ Pages.cetak = {
         ${Ck.scope === 'ruang' ? `<label class="fld"><span>Ruang</span><select class="in" data-ch="ckSet" name="ruang">${opts(rooms.map(r => [r.id, r.nama]), Ck.ruang)}</select></label>` : ''}
         ${sel('Urutan cetak', 'urut', [['no', 'Nomor ujian'], ['kelas', 'Kelas, lalu nama']], Ck.urut, 'data-ch="ckSet"')}`;
       info = `<b>${n}</b> kartu · <b>${Math.ceil(n / per)}</b> lembar ${t.kertas}` + (!DB.peserta.length && n ? '<div class="note wa" style="margin-top:10px">' + ic('alert') + '<span>Peserta belum dibagi ke ruang — kartu akan tercetak tanpa nomor ujian.</span></div>' : '');
+    } else if (tab === 'terima') {
+      const list = ckTerima(), W = waliData(), kosong = list.filter(k => !(W[k] || {}).nama); n = list.length;
+      opsi = `<div class="fld"><span>Ukuran kertas</span><span class="seg">${['A4', 'F4'].map(k => `<button class="${Ck.kertas === k ? 'on' : ''}" data-act="ckKertas" data-v="${k}">${k}</button>`).join('')}</span></div>
+        <label class="fld"><span>Kelas</span><select class="in" data-ch="ckSet" name="tkKelas">${opts(kelas, Ck.tkKelas, 'Semua kelas (satu halaman per kelas)')}</select></label>
+        <div class="fld"><span>Penanda tangan</span><span class="seg">${['Wali Kelas', 'Guru Kelas'].map(k => `<button class="${Ck.sebutan === k ? 'on' : ''}" data-act="ckSebutan" data-v="${k}">${k}</button>`).join('')}</span></div>
+        <button class="btn" style="width:100%;margin-bottom:14px" data-act="waliAtur">${ic('users')} Atur Data Wali / Guru Kelas</button>
+        ${kosong.length ? `<div class="note wa" style="margin-bottom:14px">${ic('alert')}<span>${kosong.length} kelas belum diisi nama ${Ck.sebutan.toLowerCase()} (${esc(kosong.slice(0, 4).join(', '))}${kosong.length > 4 ? ', …' : ''}). Kolom nama akan dicetak titik-titik.</span></div>` : ''}`;
+      info = `<b>${n}</b> daftar terima kartu (satu per kelas)` + (!DB.peserta.length && n ? '<div class="note wa" style="margin-top:10px">' + ic('alert') + '<span>Peserta belum dibagi — kolom No. Peserta akan kosong.</span></div>' : '');
     } else {
       const list = ckSesi(); n = list.length;
       const tgl = [...new Set(DB.sesi.map(x => x.tanggal))].sort(), mapel = [...new Set(DB.sesi.filter(x => !Ck.tgl || x.tanggal === Ck.tgl).map(x => x.mapel))].sort(nat);
@@ -104,7 +149,7 @@ Pages.cetak = {
     }
     el.innerHTML = `
       <div class="ph"><div><h1>Cetak Dokumen</h1><p>Pilih dokumen dan cakupannya. Di dialog cetak, pilih printer atau <b>Simpan sebagai PDF</b>, skala 100%, dan matikan "Header dan footer".</p></div></div>
-      <div class="tabs">${[['kartu', 'Kartu Sumatif'], ['hadir', 'Daftar Hadir'], ['berita', 'Berita Acara']].map(t => `<button class="${tab === t[0] ? 'on' : ''}" data-act="ckTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>
+      <div class="tabs">${[['kartu', 'Kartu Sumatif'], ['terima', 'Daftar Terima Kartu'], ['hadir', 'Daftar Hadir'], ['berita', 'Berita Acara']].map(t => `<button class="${tab === t[0] ? 'on' : ''}" data-act="ckTab" data-v="${t[0]}">${t[1]}</button>`).join('')}</div>
       <div class="g g-12" style="align-items:start"><div class="card">${opsi}
           <div style="padding:12px 0;border-top:1px solid var(--bd);margin-top:4px">${info}</div>
           <button class="btn pri" style="width:100%" data-act="ckCetak" ${n ? '' : 'disabled'}>${ic('printer')} Cetak / Simpan PDF</button></div>
@@ -119,6 +164,11 @@ function ckPreview() {
     p.style.cssText = `width:${d.pw}mm;height:${d.ph}mm;padding:${t.L.margin}mm`;
     const isi = () => { p.innerHTML = list.length ? lembarKartu(t, list) : emptyBox('Tidak ada siswa pada cakupan ini'); cetakFit(); };
     isi(); if (t.L.showFoto) Foto.ensure(list).then(() => { if (p.isConnected && Ck.tab === 'kartu') isi(); });
+  } else if (Ck.tab === 'terima') {
+    const [pw, ph] = PAPER[Ck.kertas], k = ckTerima()[0];
+    p.style.cssText = `width:${pw}mm;min-height:${ph}mm;padding:${DOC_MARGIN}`;
+    p.innerHTML = k ? terimaHTML(k) : emptyBox('Belum ada data siswa');
+    cetakFit();
   } else {
     const [pw, ph] = PAPER[Ck.kertas], x = ckSesi()[0];
     p.style.cssText = `width:${pw}mm;min-height:${ph}mm;padding:${DOC_MARGIN}`;
@@ -131,10 +181,12 @@ window.cetakFit = cetakFit;
 Act.ckTab = t => { Ck.tab = t.dataset.v; rerender(); };
 Act.ckScope = t => { Ck.scope = t.dataset.v; rerender(); };
 Act.ckKertas = t => { Ck.kertas = t.dataset.v; ckSimpan(); rerender(); };
+Act.ckSebutan = t => { Ck.sebutan = t.dataset.v; ckSimpan(); rerender(); };
 Act.ckPengawas = t => { Ck.nPengawas = +t.dataset.v; ckSimpan(); rerender(); };
 On.ckKepsek = t => { Ck.baKepsek = t.checked; ckSimpan(); rerender(); };
 On.ckSet = t => { Ck[t.name] = t.value; if (t.name === 'tgl') Ck.mapel = ''; rerender(); };
 Act.ckCetak = async t => {
+  if (Ck.tab === 'terima') { printDoc(ckTerima().map(terimaHTML), Ck.kertas, DOC_MARGIN); return; }
   if (Ck.tab !== 'kartu') { const list = ckSesi(); printDoc(list.map(Ck.tab === 'hadir' ? daftarHadirHTML : beritaAcaraHTML), Ck.kertas, DOC_MARGIN); return; }
   const tpl = ckTemplat(), list = ckSiswa(), per = tpl.cols * tpl.rows, pages = [];
   if (tpl.L.showFoto) {                                             // muat foto yang belum ada di perangkat (per 20)
