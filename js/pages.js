@@ -104,7 +104,7 @@ function siswaTbl() {
         <td><b>${esc(s.nama)}</b></td><td class="mono">${esc(s.nis)}</td><td class="mono" ${dup ? 'style="color:var(--er);font-weight:700"' : ''}>${esc(s.nisn)}</td>
         <td class="nw">${esc([s.tempatLahir, fTgl(s.tglLahir)].filter(Boolean).join(', '))}</td><td><span class="bdg pr">${esc(s.kelas)}</span></td>
         <td>${dup ? '<span class="bdg er">NISN ganda</span>' : s.fotoId ? '<span class="bdg ok">Lengkap</span>' : '<span class="bdg se">Foto belum ada</span>'}</td>
-        <td class="r nw"><button class="ib" data-act="sisEdit" data-id="${s.id}" aria-label="Ubah">${ic('edit')}</button><button class="ib dan" data-act="sisHapus" data-id="${s.id}" aria-label="Hapus">${ic('trash')}</button></td></tr>`;
+        <td class="r nw"><button class="ib" data-act="sisCetakUlang" data-id="${s.id}" aria-label="Cetak ulang kartu" title="Cetak ulang kartu">${ic('printer')}</button><button class="ib" data-act="sisEdit" data-id="${s.id}" aria-label="Ubah">${ic('edit')}</button><button class="ib dan" data-act="sisHapus" data-id="${s.id}" aria-label="Hapus">${ic('trash')}</button></td></tr>`;
     }).join('') || '<tr><td colspan="9">' + emptyBox('Tidak ada yang cocok', 'Ubah kata kunci atau filter.') + '</td></tr>'}
     </tbody></table></div>${pager(rows.length, f.page, PER, 'sisPage')}`;
   Foto.hydrate(el);

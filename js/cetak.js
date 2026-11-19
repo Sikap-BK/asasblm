@@ -4,7 +4,7 @@
    "Simpan sebagai PDF" tersedia di dialog yang sama.
    ============================================================ */
 'use strict';
-const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, sebutan: 'Wali Kelas', tkKelas: '', _muat: false };
+const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, sebutan: 'Wali Kelas', tkKelas: '', pilih: new Set(), cari: '', mulai: 1, _muat: false };
 /** Pilihan cetak (kertas, jumlah pengawas, tanda tangan kepsek) diingat di pengaturan. */
 function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.cetak || {}; if (PAPER[c.kertas]) Ck.kertas = c.kertas; if (c.nPengawas) Ck.nPengawas = +c.nPengawas === 2 ? 2 : 1; if (c.baKepsek != null) Ck.baKepsek = !!c.baKepsek; if (c.sebutan === 'Guru Kelas') Ck.sebutan = c.sebutan; }
 const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek, sebutan: Ck.sebutan } });
@@ -71,7 +71,7 @@ const DOC_MARGIN = '12mm 15mm';
 function ckTemplat() { const list = daftarTemplat(); return list.find(t => t.id === Ck.tpl) || list[0] || (KD.t && KD.t.jenis === 'Kartu' ? KD.t : tplBaru()); }
 function ckSiswa() {
   const ix = IX();
-  const list = DB.siswa.filter(s => Ck.scope === 'kelas' ? s.kelas === Ck.kelas : Ck.scope === 'ruang' ? (ix.pes.get(s.nisn) || {}).idRuang === Ck.ruang : true);
+  const list = DB.siswa.filter(s => Ck.scope === 'pilih' ? Ck.pilih.has(s.nisn) : Ck.scope === 'kelas' ? s.kelas === Ck.kelas : Ck.scope === 'ruang' ? (ix.pes.get(s.nisn) || {}).idRuang === Ck.ruang : true);
   const no = s => (ix.pes.get(s.nisn) || {}).noUjian || '￿';
   return list.sort(Ck.urut === 'kelas' ? (a, b) => cmpKelas(a.kelas, b.kelas) || nat(a.nama, b.nama) : (a, b) => nat(no(a), no(b)) || nat(a.nama, b.nama));
 }
@@ -127,6 +127,37 @@ function beritaAcaraHTML(x) {
       : `<div class="sgn">${Ck.baKepsek ? kepsek : '<div></div>'}${kotakTtd(titi + '<br>Pengawas,', x.pengawas)}</div>`}</div>`;
 }
 
+/** Kotak kartu yang dicetak: untuk "Pilih siswa", kotak sebelum posisi mulai dibiarkan kosong. */
+function ckSlot(list, per) { const lewat = Ck.scope === 'pilih' ? clamp((+Ck.mulai || 1) - 1, 0, per - 1) : 0; return Array(lewat).fill(null).concat(list); }
+
+/* ---------- Pilih siswa (cetak ulang kartu yang hilang) ---------- */
+function ckDaftarPilih() {
+  const el = $('#ck-pilih-list'); if (!el) return;
+  const ix = IX(), q = Ck.cari.trim().toLowerCase();
+  const cocok = DB.siswa.filter(s => !q || (s.nama + ' ' + s.nisn + ' ' + s.nis + ' ' + s.kelas + ' ' + ((ix.pes.get(s.nisn) || {}).noUjian || '')).toLowerCase().includes(q))
+    .sort((a, b) => cmpKelas(a.kelas, b.kelas) || nat(a.nama, b.nama));
+  const tampil = cocok.slice(0, 60);
+  el.innerHTML = tampil.length ? tampil.map(s => `<label class="chk ck-opsi"><input type="checkbox" data-ch="ckPilih" data-n="${esc(s.nisn)}" ${Ck.pilih.has(s.nisn) ? 'checked' : ''}>
+      <span><b>${esc(s.nama)}</b><small>${esc(s.kelas)} · ${esc((ix.pes.get(s.nisn) || {}).noUjian || 'belum ada no. peserta')}</small></span></label>`).join('')
+      + (cocok.length > tampil.length ? `<p class="mu" style="font-size:12px;padding:6px 4px">${cocok.length - tampil.length} siswa lain — ketik nama untuk mempersempit.</p>` : '')
+    : `<p class="mu" style="padding:10px 4px">Tidak ada siswa yang cocok.</p>`;
+}
+On.ckCari = debounce(t => { Ck.cari = t.value; ckDaftarPilih(); }, 150);
+function ckSegarkanPilih() {                                        // render ulang tanpa kehilangan posisi gulir daftar
+  const g = ($('#ck-pilih-list') || {}).scrollTop || 0; rerender(); const el = $('#ck-pilih-list'); if (el) el.scrollTop = g;
+}
+On.ckPilih = t => { const n = t.dataset.n; t.checked ? Ck.pilih.add(n) : Ck.pilih.delete(n); ckSegarkanPilih(); };
+Act.ckLepas = t => { Ck.pilih.delete(t.dataset.n); ckSegarkanPilih(); };
+Act.ckKosongkan = () => { Ck.pilih.clear(); ckSegarkanPilih(); };
+On.ckMulai = t => { Ck.mulai = +t.value || 1; rerender(); };
+/** Dari tabel Data Siswa: langsung siapkan cetak ulang kartu siswa itu. */
+Act.sisCetakUlang = t => {
+  const s = DB.siswa.find(x => x.id === t.dataset.id); if (!s) return;
+  Ck.tab = 'kartu'; Ck.scope = 'pilih'; Ck.pilih.add(s.nisn); Ck.cari = '';
+  location.hash = '#/cetak';
+  toast(`${s.nama} masuk daftar cetak ulang (${Ck.pilih.size} siswa).`, 'ok');
+};
+
 /* ================= DAFTAR TERIMA KARTU (per kelas) ================= */
 const waliData = () => DB.set.wali || {};
 const idOrang = w => w && w.jenis && w.no ? w.jenis + '. ' + w.no : '';
@@ -176,11 +207,17 @@ Pages.cetak = {
     if (tab === 'kartu') {
       const t = ckTemplat(), list = ckSiswa(), per = t.cols * t.rows; n = list.length;
       opsi = `<label class="fld"><span>Templat kartu</span><select class="in" data-ch="ckSet" name="tpl">${tpls.length ? opts(tpls.map(x => [x.id, x.L.nama + ' — ' + x.kertas + ', ' + x.cols + '×' + x.rows]), t.id) : '<option>Templat bawaan (belum disimpan)</option>'}</select></label>
-        <div class="fld"><span>Cakupan</span><span class="seg">${[['semua', 'Semua siswa'], ['kelas', 'Per kelas'], ['ruang', 'Per ruang']].map(s => `<button class="${Ck.scope === s[0] ? 'on' : ''}" data-act="ckScope" data-v="${s[0]}">${s[1]}</button>`).join('')}</span></div>
+        <div class="fld"><span>Cakupan</span><span class="seg">${[['semua', 'Semua siswa'], ['kelas', 'Per kelas'], ['ruang', 'Per ruang'], ['pilih', 'Pilih siswa']].map(s => `<button class="${Ck.scope === s[0] ? 'on' : ''}" data-act="ckScope" data-v="${s[0]}">${s[1]}</button>`).join('')}</span></div>
         ${Ck.scope === 'kelas' ? `<label class="fld"><span>Kelas</span><select class="in" data-ch="ckSet" name="kelas">${opts(kelas, Ck.kelas)}</select></label>` : ''}
         ${Ck.scope === 'ruang' ? `<label class="fld"><span>Ruang</span><select class="in" data-ch="ckSet" name="ruang">${opts(rooms.map(r => [r.id, r.nama]), Ck.ruang)}</select></label>` : ''}
+        ${Ck.scope === 'pilih' ? (() => { const ix = IX(), dipilih = DB.siswa.filter(s => Ck.pilih.has(s.nisn)).sort((a, b) => cmpKelas(a.kelas, b.kelas) || nat(a.nama, b.nama)); return `
+        <div class="fld"><span>Siswa yang dicetak ulang (${dipilih.length})</span>
+          ${dipilih.length ? `<div class="row" style="gap:6px;margin-bottom:8px">${dipilih.length > 1 ? `<button class="btn sm dan" data-act="ckKosongkan">${ic('trash')} Kosongkan</button>` : ''}${dipilih.map(s => `<span class="bdg pr" style="padding:3px 4px 3px 9px">${esc(s.nama)} <span class="mu">${esc(s.kelas)}</span><button class="ib" style="width:22px;height:22px" data-act="ckLepas" data-n="${esc(s.nisn)}" aria-label="Lepas ${esc(s.nama)}">${ic('x')}</button></span>`).join('')}</div>` : ''}
+          <div class="srch" style="max-width:none;margin-bottom:6px">${ic('search')}<input class="in" placeholder="Cari nama, NISN, kelas, atau no. peserta…" value="${esc(Ck.cari)}" data-on="ckCari" aria-label="Cari siswa"></div>
+          <div id="ck-pilih-list" class="ck-pilih"></div></div>
+        <label class="fld"><span>Mulai cetak dari kotak ke-</span><select class="in" data-ch="ckMulai">${opts(Array.from({ length: per }, (_, i) => [i + 1, i + 1 === 1 ? '1 (kertas baru)' : String(i + 1)]), Ck.mulai)}</select><small>Pakai kertas kartu yang sebagian sudah terpakai: kotak sebelumnya dibiarkan kosong. Urutan kotak dari kiri ke kanan, lalu ke bawah.</small></label>`; })() : ''}
         ${sel('Urutan cetak', 'urut', [['no', 'Nomor ujian'], ['kelas', 'Kelas, lalu nama']], Ck.urut, 'data-ch="ckSet"')}`;
-      info = `<b>${n}</b> kartu · <b>${Math.ceil(n / per)}</b> lembar ${t.kertas}` + (!DB.peserta.length && n ? '<div class="note wa" style="margin-top:10px">' + ic('alert') + '<span>Peserta belum dibagi ke ruang — kartu akan tercetak tanpa nomor ujian.</span></div>' : '');
+      info = `<b>${n}</b> kartu · <b>${Math.ceil(ckSlot(list, per).length / per) * (n ? 1 : 0)}</b> lembar ${t.kertas}` + (!DB.peserta.length && n ? '<div class="note wa" style="margin-top:10px">' + ic('alert') + '<span>Peserta belum dibagi ke ruang — kartu akan tercetak tanpa nomor ujian.</span></div>' : '');
     } else if (tab === 'terima') {
       const list = ckTerima(), W = waliData(), kosong = list.filter(k => !(W[k] || {}).nama); n = list.length;
       opsi = `<div class="fld"><span>Ukuran kertas</span><span class="seg">${['A4', 'F4'].map(k => `<button class="${Ck.kertas === k ? 'on' : ''}" data-act="ckKertas" data-v="${k}">${k}</button>`).join('')}</span></div>
@@ -208,15 +245,15 @@ Pages.cetak = {
           <div style="padding:12px 0;border-top:1px solid var(--bd);margin-top:4px">${info}</div>
           <button class="btn pri" style="width:100%" data-act="ckCetak" ${n ? '' : 'disabled'}>${ic('printer')} Cetak / Simpan PDF</button></div>
         <div class="card"><div class="ch"><h3>Pratinjau</h3><span class="mu">halaman pertama</span></div><div class="pv"><div class="pv-paper" id="ck-pv"></div></div></div></div>`;
-    ckPreview();
+    ckPreview(); ckDaftarPilih();
   }
 };
 function ckPreview() {
   const p = $('#ck-pv'); if (!p) return;
   if (Ck.tab === 'kartu') {
-    const t = ckTemplat(), d = dims(t), list = ckSiswa().slice(0, t.cols * t.rows);
+    const t = ckTemplat(), d = dims(t), per = t.cols * t.rows, semua = ckSiswa(), slot = ckSlot(semua, per).slice(0, per), list = slot.filter(Boolean);
     p.style.cssText = `width:${d.pw}mm;height:${d.ph}mm;padding:${t.L.margin}mm`;
-    const isi = () => { p.innerHTML = list.length ? lembarKartu(t, list) : emptyBox('Tidak ada siswa pada cakupan ini'); cetakFit(); };
+    const isi = () => { p.innerHTML = semua.length ? lembarKartu(t, slot) : emptyBox(Ck.scope === 'pilih' ? 'Belum ada siswa dipilih' : 'Tidak ada siswa pada cakupan ini', Ck.scope === 'pilih' ? 'Cari lalu centang siswa yang kartunya akan dicetak ulang.' : ''); cetakFit(); };
     isi(); if (t.L.showFoto) Foto.ensure(list).then(() => { if (p.isConnected && Ck.tab === 'kartu') isi(); });
   } else if (Ck.tab === 'terima') {
     const [pw, ph] = PAPER[Ck.kertas], k = ckTerima()[0];
@@ -248,7 +285,8 @@ Act.ckCetak = async t => {
     await Foto.ensure(list, (i, n) => { t.textContent = `Memuat foto ${i}/${n}…`; });
     t.disabled = false; t.innerHTML = label;
   }
-  for (let i = 0; i < list.length; i += per) pages.push(lembarKartu(tpl, list.slice(i, i + per)));
+  const slot = ckSlot(list, per);
+  for (let i = 0; i < slot.length; i += per) pages.push(lembarKartu(tpl, slot.slice(i, i + per)));
   printDoc(pages, tpl.kertas, tpl.L.margin + 'mm');
 };
 

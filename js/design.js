@@ -176,7 +176,8 @@ function cardHTML(t, s, design) {
 /** Satu lembar berisi kolom × baris kartu. */
 function lembarKartu(t, list) {
   const { W } = dims(t);
-  return `<div class="k-sheet" style="grid-template-columns:repeat(${t.cols},${W}mm);gap:${t.L.gap}mm">${list.map(s => cardHTML(t, s)).join('')}</div>`;
+  const { H } = dims(t);                                           // null = kotak dilewati (kertas yang sebagian sudah terpakai)
+  return `<div class="k-sheet" style="grid-template-columns:repeat(${t.cols},${W}mm);gap:${t.L.gap}mm">${list.map(s => s ? cardHTML(t, s) : `<div class="k-lewat" style="width:${W}mm;height:${H}mm"></div>`).join('')}</div>`;
 }
 
 const KD = { t: null, sel: '', zf: 1, z: 1, dirty: false };
