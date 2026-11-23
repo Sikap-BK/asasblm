@@ -4,10 +4,32 @@
    "Simpan sebagai PDF" tersedia di dialog yang sama.
    ============================================================ */
 'use strict';
-const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, sebutan: 'Wali Kelas', tkKelas: '', pilih: new Set(), cari: '', mulai: 1, _muat: false };
+const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, sebutan: 'Wali Kelas', tkKelas: '', pilih: new Set(), cari: '', mulai: 1, baTgl: 'jadwal', baThn: 'auto', baThnIsi: '', baHuruf: false, _muat: false };
 /** Pilihan cetak (kertas, jumlah pengawas, tanda tangan kepsek) diingat di pengaturan. */
-function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.cetak || {}; if (PAPER[c.kertas]) Ck.kertas = c.kertas; if (c.nPengawas) Ck.nPengawas = +c.nPengawas === 2 ? 2 : 1; if (c.baKepsek != null) Ck.baKepsek = !!c.baKepsek; if (c.sebutan === 'Guru Kelas') Ck.sebutan = c.sebutan; }
-const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek, sebutan: Ck.sebutan } });
+function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.cetak || {}; if (PAPER[c.kertas]) Ck.kertas = c.kertas; if (c.nPengawas) Ck.nPengawas = +c.nPengawas === 2 ? 2 : 1; if (c.baKepsek != null) Ck.baKepsek = !!c.baKepsek; if (c.sebutan === 'Guru Kelas') Ck.sebutan = c.sebutan;
+  if (c.baTgl === 'kosong') Ck.baTgl = 'kosong'; if (c.baThn === 'manual') Ck.baThn = 'manual'; if (c.baThnIsi) Ck.baThnIsi = String(c.baThnIsi); Ck.baHuruf = !!c.baHuruf; }
+const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek, sebutan: Ck.sebutan, baTgl: Ck.baTgl, baThn: Ck.baThn, baThnIsi: Ck.baThnIsi, baHuruf: Ck.baHuruf } });
+/** Angka → huruf (terbilang), untuk tanggal & tahun pada berita acara. */
+function terbilang(n) {
+  const a = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
+  n = Math.floor(+n || 0);
+  if (n < 12) return a[n];
+  if (n < 20) return terbilang(n - 10) + ' belas';
+  if (n < 100) return (terbilang(Math.floor(n / 10)) + ' puluh ' + terbilang(n % 10)).trim();
+  if (n < 200) return ('seratus ' + terbilang(n - 100)).trim();
+  if (n < 1000) return (terbilang(Math.floor(n / 100)) + ' ratus ' + terbilang(n % 100)).trim();
+  if (n < 2000) return ('seribu ' + terbilang(n - 1000)).trim();
+  return (terbilang(Math.floor(n / 1000)) + ' ribu ' + terbilang(n % 1000)).trim();
+}
+/** Tahun yang dicetak bila tanggal tidak diambil dari jadwal: tahun berjalan, atau isian manual. */
+const baTahun = () => Ck.baThn === 'manual' && /^\d{4}$/.test(Ck.baThnIsi) ? +Ck.baThnIsi : new Date().getFullYear();
+/** "Pada hari ini … tanggal … bulan … tahun …" — otomatis dari jadwal sesi, atau dikosongkan untuk ditulis tangan. */
+function kalimatHariIni(tanggal) {
+  const d = Ck.baTgl === 'jadwal' ? pTgl(tanggal) : null, h = Ck.baHuruf, B = v => '<b>' + v + '</b>';
+  const thn = d ? d.getFullYear() : baTahun();
+  return 'Pada hari ini ' + (d ? B(HARI[d.getDay()]) : titik(18)) + ' tanggal ' + (d ? B(h ? terbilang(d.getDate()) : d.getDate()) : titik(12))
+    + ' bulan ' + (d ? B(BLN[d.getMonth()]) : titik(18)) + ' tahun ' + B(h ? terbilang(thn) : thn);
+}
 /** Kotak tanda tangan pengawas. Dua pengawas bila dipilih 2 atau Pengawas 2 pada jadwal terisi. */
 const duaPengawas = x => Ck.nPengawas === 2 || !!x.pengawas2;
 /** Nama penanda tangan selalu satu baris (huruf mengecil bila terlalu panjang). */
@@ -116,7 +138,7 @@ function beritaAcaraHTML(x) {
   const kepsek = `<div>Mengetahui,<br>Kepala Sekolah,<div class="sp"></div>${namaTtd(s.kepsek)}${idKepsek() ? '<br>' + esc(idKepsek()) : ''}</div>`;
   const baris = [['Sekolah', esc(namaSekolah()) || titik(50)], ['Ruang', r.nama || ''], ['Jumlah peserta seharusnya', n + ' orang'], ['Jumlah hadir', (esc(x.hadir) || titik(10)) + ' orang'], ['Jumlah tidak hadir', (esc(x.tidakHadir) || titik(10)) + ' orang'], ['Nomor peserta tidak hadir', titik(60)]];
   return `<div class="doc">${dokKepala('BERITA ACARA PELAKSANAAN')}
-    <p style="text-align:justify;margin-top:5mm;line-height:1.7">Pada hari ini ${d ? '<b>' + HARI[d.getDay()] + '</b> tanggal <b>' + d.getDate() + ' ' + BLN[d.getMonth()] + ' ' + d.getFullYear() + '</b>' : titik(20) + ' tanggal ' + titik(30)},
+    <p style="text-align:justify;margin-top:5mm;line-height:1.7">${kalimatHariIni(x.tanggal)},
       telah dilaksanakan Sumatif Akhir Semester ${esc(s.semester || '')} Tahun Ajaran ${esc(s.tahunAjaran || '')} untuk mata pelajaran <b>${esc(x.mapel) || titik(40)}</b>,
       dari pukul <b>${esc(m1 || titik(10))}</b> sampai dengan pukul <b>${esc(m2 || titik(10))}</b>, dengan keterangan sebagai berikut:</p>
     <table class="inf" style="margin:4mm 0 4mm 8mm;width:auto">${baris.map(b => `<tr><td style="width:58mm">${b[0]}</td><td>:</td><td>${b[1]}</td></tr>`).join('')}</table>
@@ -235,7 +257,12 @@ Pages.cetak = {
           : `<div class="note" style="margin-bottom:14px">${ic('info')}<span>Belum ada jadwal sesi — dokumen dicetak per ruang dengan isian kosong untuk ditulis tangan.</span></div>`}
         <label class="fld"><span>Ruang</span><select class="in" data-ch="ckSet" name="fr">${opts(rooms.map(r => [r.id, r.nama]), Ck.fr, 'Semua ruang')}</select></label>
         <div class="fld"><span>Jumlah pengawas ruang</span><span class="seg">${[1, 2].map(k => `<button class="${Ck.nPengawas === k ? 'on' : ''}" data-act="ckPengawas" data-v="${k}">${k} pengawas</button>`).join('')}</span></div>
-        ${tab === 'berita' ? `<label class="row" style="gap:8px;font-weight:500;margin-bottom:14px"><span class="sw"><input type="checkbox" data-ch="ckKepsek" ${Ck.baKepsek ? 'checked' : ''}><i></i></span>Kolom tanda tangan Kepala Sekolah</label>` : ''}`;
+        ${tab === 'berita' ? `<div class="fld"><span>Isian "Pada hari ini … tanggal … bulan … tahun …"</span><span class="seg">${[['jadwal', 'Otomatis dari jadwal'], ['kosong', 'Kosong (tulis tangan)']].map(k => `<button class="${Ck.baTgl === k[0] ? 'on' : ''}" data-act="baTgl" data-v="${k[0]}">${k[1]}</button>`).join('')}</span>
+          <small>${Ck.baTgl === 'jadwal' ? 'Hari, tanggal, bulan, dan tahun diambil dari tanggal sesi. Bila sesi belum bertanggal, dikosongkan dan tahun memakai pilihan di bawah.' : 'Hari, tanggal, dan bulan dicetak titik-titik untuk ditulis tangan; tahun tetap terisi.'}</small></div>
+        <div class="fld"><span>Tahun</span><div class="row"><span class="seg">${[['auto', 'Tahun berjalan (' + new Date().getFullYear() + ')'], ['manual', 'Isi manual']].map(k => `<button class="${Ck.baThn === k[0] ? 'on' : ''}" data-act="baThn" data-v="${k[0]}">${k[1]}</button>`).join('')}</span>
+          ${Ck.baThn === 'manual' ? `<input class="in" style="width:96px" inputmode="numeric" maxlength="4" placeholder="${new Date().getFullYear()}" value="${esc(Ck.baThnIsi)}" data-on="baThnIsi" aria-label="Tahun manual">` : ''}</div></div>
+        <label class="chk" style="margin-bottom:14px"><input type="checkbox" data-ch="baHuruf" ${Ck.baHuruf ? 'checked' : ''}><span>Tulis tanggal & tahun dengan huruf (mis. <i>tujuh</i>, <i>dua ribu dua puluh enam</i>)</span></label>
+        <label class="row" style="gap:8px;font-weight:500;margin-bottom:14px"><span class="sw"><input type="checkbox" data-ch="ckKepsek" ${Ck.baKepsek ? 'checked' : ''}><i></i></span>Kolom tanda tangan Kepala Sekolah</label>` : ''}`;
       info = `<b>${n}</b> ${tab === 'hadir' ? 'daftar hadir' : 'berita acara'} (satu per ruang per sesi)`;
     }
     el.innerHTML = `
@@ -272,6 +299,10 @@ window.cetakFit = cetakFit;
 Act.ckTab = t => { Ck.tab = t.dataset.v; rerender(); };
 Act.ckScope = t => { Ck.scope = t.dataset.v; rerender(); };
 Act.ckKertas = t => { Ck.kertas = t.dataset.v; ckSimpan(); rerender(); };
+Act.baTgl = t => { Ck.baTgl = t.dataset.v; ckSimpan(); rerender(); };
+Act.baThn = t => { Ck.baThn = t.dataset.v; ckSimpan(); rerender(); };
+On.baThnIsi = debounce(t => { const v = t.value.replace(/\D/g, '').slice(0, 4); Ck.baThnIsi = v; if (!v || v.length === 4) { ckSimpan(); ckPreview(); } }, 300);
+On.baHuruf = t => { Ck.baHuruf = t.checked; ckSimpan(); ckPreview(); };
 Act.ckSebutan = t => { Ck.sebutan = t.dataset.v; ckSimpan(); rerender(); };
 Act.ckPengawas = t => { Ck.nPengawas = +t.dataset.v; ckSimpan(); rerender(); };
 On.ckKepsek = t => { Ck.baKepsek = t.checked; ckSimpan(); rerender(); };
