@@ -4,11 +4,16 @@
    "Simpan sebagai PDF" tersedia di dialog yang sama.
    ============================================================ */
 'use strict';
-const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, sebutan: 'Wali Kelas', tkKelas: '', pilih: new Set(), cari: '', mulai: 1, baTgl: 'jadwal', baThn: 'auto', baThnIsi: '', baHuruf: false, _muat: false };
+const Ck = { tab: 'kartu', tpl: '', scope: 'semua', kelas: '', ruang: '', urut: 'no', kertas: 'A4', tgl: '', mapel: '', fr: '', nPengawas: 1, baKepsek: true, sebutan: 'Wali Kelas', tkKelas: '', pilih: new Set(), cari: '', mulai: 1, baTgl: 'jadwal', baThn: 'auto', baThnIsi: '', baHuruf: false,
+  baTtd: 'sesuai', baTempat: null, baTtdIsi: '', baRuang: 'auto', baRuangIsi: '', baJml: 'auto', baJmlIsi: '', _muat: false };
 /** Pilihan cetak (kertas, jumlah pengawas, tanda tangan kepsek) diingat di pengaturan. */
 function ckMuat() { if (Ck._muat) return; Ck._muat = true; const c = DB.set.cetak || {}; if (PAPER[c.kertas]) Ck.kertas = c.kertas; if (c.nPengawas) Ck.nPengawas = +c.nPengawas === 2 ? 2 : 1; if (c.baKepsek != null) Ck.baKepsek = !!c.baKepsek; if (c.sebutan === 'Guru Kelas') Ck.sebutan = c.sebutan;
-  if (c.baTgl === 'kosong') Ck.baTgl = 'kosong'; if (c.baThn === 'manual') Ck.baThn = 'manual'; if (c.baThnIsi) Ck.baThnIsi = String(c.baThnIsi); Ck.baHuruf = !!c.baHuruf; }
-const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek, sebutan: Ck.sebutan, baTgl: Ck.baTgl, baThn: Ck.baThn, baThnIsi: Ck.baThnIsi, baHuruf: Ck.baHuruf } });
+  if (c.baTgl === 'kosong') Ck.baTgl = 'kosong'; if (c.baThn === 'manual') Ck.baThn = 'manual'; if (c.baThnIsi) Ck.baThnIsi = String(c.baThnIsi); Ck.baHuruf = !!c.baHuruf;
+  if (c.baTtd === 'manual') Ck.baTtd = 'manual'; if (c.baTempat != null) Ck.baTempat = String(c.baTempat); Ck.baTtdIsi = String(c.baTtdIsi || '');
+  if (/^(kosong|manual)$/.test(c.baRuang)) Ck.baRuang = c.baRuang; Ck.baRuangIsi = String(c.baRuangIsi || '');
+  if (/^(kosong|manual)$/.test(c.baJml)) Ck.baJml = c.baJml; Ck.baJmlIsi = String(c.baJmlIsi || ''); }
+const ckSimpan = () => Data.set({ cetak: { kertas: Ck.kertas, nPengawas: Ck.nPengawas, baKepsek: Ck.baKepsek, sebutan: Ck.sebutan, baTgl: Ck.baTgl, baThn: Ck.baThn, baThnIsi: Ck.baThnIsi, baHuruf: Ck.baHuruf,
+  baTtd: Ck.baTtd, baTempat: Ck.baTempat, baTtdIsi: Ck.baTtdIsi, baRuang: Ck.baRuang, baRuangIsi: Ck.baRuangIsi, baJml: Ck.baJml, baJmlIsi: Ck.baJmlIsi } });
 /** Angka → huruf (terbilang), untuk tanggal & tahun pada berita acara. */
 function terbilang(n) {
   const a = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas'];
@@ -23,7 +28,15 @@ function terbilang(n) {
 }
 /** Tahun yang dicetak bila tanggal tidak diambil dari jadwal: tahun berjalan, atau isian manual. */
 const baTahun = () => Ck.baThn === 'manual' && /^\d{4}$/.test(Ck.baThnIsi) ? +Ck.baThnIsi : new Date().getFullYear();
-/** "Pada hari ini … tanggal … bulan … tahun …" — otomatis dari jadwal sesi, atau dikosongkan untuk ditulis tangan. */
+/** Tempat pada tanda tangan berita acara: isian sendiri, atau diambil dari "Tempat & tanggal" di Pengaturan (bagian sebelum koma). */
+const baTempat = () => Ck.baTempat != null ? Ck.baTempat : String(DB.set.titimangsa || '').split(',')[0].trim();
+/** Tempat & tanggal di atas "Pengawas," — sama dengan tanggal di isi berita acara, atau diisi manual. */
+function baTitimangsa(tanggal) {
+  if (Ck.baTtd === 'manual') return esc(Ck.baTtdIsi) || titik(40);
+  const d = Ck.baTgl === 'jadwal' ? pTgl(tanggal) : null, tempat = esc(baTempat()) || titik(22);
+  return tempat + ', ' + (d ? d.getDate() + ' ' + BLN[d.getMonth()] + ' ' + d.getFullYear() : titik(26) + ' ' + baTahun());
+}
+/** "Pada hari ini … tanggal … bulan … tahun …\" — otomatis dari jadwal sesi, atau dikosongkan untuk ditulis tangan. */
 function kalimatHariIni(tanggal) {
   const d = Ck.baTgl === 'jadwal' ? pTgl(tanggal) : null, h = Ck.baHuruf, B = v => '<b>' + v + '</b>';
   const thn = d ? d.getFullYear() : baTahun();
@@ -133,10 +146,11 @@ function daftarHadirHTML(x) {
 function beritaAcaraHTML(x) {
   const s = DB.set, r = IX().ruang.get(x.idRuang) || {}, n = pesertaRuang(x.idRuang).length, d = pTgl(x.tanggal);
   const [m1, m2] = (x.jam || '').split(/\s*-\s*/);
-  const dua = duaPengawas(x), titi = esc(s.titimangsa || titik(40));
+  const dua = duaPengawas(x), titi = baTitimangsa(x.tanggal);
   // Tanda tangan kepala sekolah di berita acara selalu dikosongkan (ditandatangani basah), hanya nama & nomor.
   const kepsek = `<div>Mengetahui,<br>Kepala Sekolah,<div class="sp"></div>${namaTtd(s.kepsek)}${idKepsek() ? '<br>' + esc(idKepsek()) : ''}</div>`;
-  const baris = [['Sekolah', esc(namaSekolah()) || titik(50)], ['Ruang', r.nama || ''], ['Jumlah peserta seharusnya', n + ' orang'], ['Jumlah hadir', (esc(x.hadir) || titik(10)) + ' orang'], ['Jumlah tidak hadir', (esc(x.tidakHadir) || titik(10)) + ' orang'], ['Nomor peserta tidak hadir', titik(60)]];
+  const baris = [['Sekolah', esc(namaSekolah()) || titik(50)], ['Ruang', Ck.baRuang === 'kosong' ? titik(40) : Ck.baRuang === 'manual' ? (esc(Ck.baRuangIsi) || titik(40)) : esc(r.nama || '') || titik(40)],
+    ['Jumlah peserta seharusnya', (Ck.baJml === 'kosong' ? titik(10) : Ck.baJml === 'manual' ? (esc(Ck.baJmlIsi) || titik(10)) : n) + ' orang'], ['Jumlah hadir', (esc(x.hadir) || titik(10)) + ' orang'], ['Jumlah tidak hadir', (esc(x.tidakHadir) || titik(10)) + ' orang'], ['Nomor peserta tidak hadir', titik(60)]];
   return `<div class="doc">${dokKepala('BERITA ACARA PELAKSANAAN')}
     <p style="text-align:justify;margin-top:5mm;line-height:1.7">${kalimatHariIni(x.tanggal)},
       telah dilaksanakan Sumatif Akhir Semester ${esc(s.semester || '')} Tahun Ajaran ${esc(s.tahunAjaran || '')} untuk mata pelajaran <b>${esc(x.mapel) || titik(40)}</b>,
@@ -261,6 +275,16 @@ Pages.cetak = {
           <small>${Ck.baTgl === 'jadwal' ? 'Hari, tanggal, bulan, dan tahun diambil dari tanggal sesi. Bila sesi belum bertanggal, dikosongkan dan tahun memakai pilihan di bawah.' : 'Hari, tanggal, dan bulan dicetak titik-titik untuk ditulis tangan; tahun tetap terisi.'}</small></div>
         <div class="fld"><span>Tahun</span><div class="row"><span class="seg">${[['auto', 'Tahun berjalan (' + new Date().getFullYear() + ')'], ['manual', 'Isi manual']].map(k => `<button class="${Ck.baThn === k[0] ? 'on' : ''}" data-act="baThn" data-v="${k[0]}">${k[1]}</button>`).join('')}</span>
           ${Ck.baThn === 'manual' ? `<input class="in" style="width:96px" inputmode="numeric" maxlength="4" placeholder="${new Date().getFullYear()}" value="${esc(Ck.baThnIsi)}" data-on="baThnIsi" aria-label="Tahun manual">` : ''}</div></div>
+        ${(() => {
+          const seg3 = (act, nilai, isi, ph, tipe) => `<div class="row"><span class="seg">${[['auto', 'Otomatis'], ['kosong', 'Tulis tangan'], ['manual', 'Isi manual']].map(k => `<button class="${nilai === k[0] ? 'on' : ''}" data-act="${act}" data-v="${k[0]}">${k[1]}</button>`).join('')}</span>
+            ${nilai === 'manual' ? `<input class="in" style="width:${tipe === 'number' ? 90 : 170}px" ${tipe === 'number' ? 'inputmode="numeric" maxlength="3"' : 'maxlength="40"'} placeholder="${ph}" value="${esc(isi)}" data-on="${act}Isi" aria-label="${ph}">` : ''}</div>`;
+          const contoh = baTitimangsa((ckSesi()[0] || {}).tanggal).replace(/<[^>]+>/g, '');
+          return `<div class="fld"><span>Tempat & tanggal tanda tangan</span><div class="row"><span class="seg">${[['sesuai', 'Sesuai isi berita acara'], ['manual', 'Isi manual']].map(k => `<button class="${Ck.baTtd === k[0] ? 'on' : ''}" data-act="baTtd" data-v="${k[0]}">${k[1]}</button>`).join('')}</span></div>
+            ${Ck.baTtd === 'manual' ? `<input class="in" style="margin-top:8px" maxlength="60" placeholder="mis. Sangatta Utara, 7 Desember 2026" value="${esc(Ck.baTtdIsi)}" data-on="baTtdIsi" aria-label="Tempat dan tanggal tanda tangan">`
+              : `<input class="in" style="margin-top:8px" maxlength="40" placeholder="Tempat, mis. Sangatta Utara" value="${esc(baTempat())}" data-on="baTempat" aria-label="Tempat tanda tangan"><small id="ba-ttd-contoh">Tercetak: ${esc(contoh)}</small>`}</div>
+            <div class="fld"><span>Ruang</span>${seg3('baRuang', Ck.baRuang, Ck.baRuangIsi, 'Nama ruang', 'text')}</div>
+            <div class="fld"><span>Jumlah peserta seharusnya</span>${seg3('baJml', Ck.baJml, Ck.baJmlIsi, 'Jumlah', 'number')}${Ck.baRuang === 'manual' || Ck.baJml === 'manual' ? '<small>Isian manual dipakai sama untuk semua berita acara yang dicetak — saring dulu ke satu ruang bila perlu.</small>' : ''}</div>`;
+        })()}
         <label class="chk" style="margin-bottom:14px"><input type="checkbox" data-ch="baHuruf" ${Ck.baHuruf ? 'checked' : ''}><span>Tulis tanggal & tahun dengan huruf (mis. <i>tujuh</i>, <i>dua ribu dua puluh enam</i>)</span></label>
         <label class="row" style="gap:8px;font-weight:500;margin-bottom:14px"><span class="sw"><input type="checkbox" data-ch="ckKepsek" ${Ck.baKepsek ? 'checked' : ''}><i></i></span>Kolom tanda tangan Kepala Sekolah</label>` : ''}`;
       info = `<b>${n}</b> ${tab === 'hadir' ? 'daftar hadir' : 'berita acara'} (satu per ruang per sesi)`;
@@ -299,6 +323,18 @@ window.cetakFit = cetakFit;
 Act.ckTab = t => { Ck.tab = t.dataset.v; rerender(); };
 Act.ckScope = t => { Ck.scope = t.dataset.v; rerender(); };
 Act.ckKertas = t => { Ck.kertas = t.dataset.v; ckSimpan(); rerender(); };
+Act.baTtd = t => { Ck.baTtd = t.dataset.v; ckSimpan(); rerender(); };
+Act.baRuang = t => { Ck.baRuang = t.dataset.v; ckSimpan(); rerender(); };
+Act.baJml = t => { Ck.baJml = t.dataset.v; ckSimpan(); rerender(); };
+const _baSegar = debounce(() => {
+  ckSimpan(); ckPreview();
+  const c = $('#ba-ttd-contoh'); if (c) c.textContent = 'Tercetak: ' + baTitimangsa((ckSesi()[0] || {}).tanggal).replace(/<[^>]+>/g, '');
+}, 250);
+const baKetik = (k, bersih) => t => { Ck[k] = bersih ? bersih(t.value) : t.value; _baSegar(); };   // ketikan langsung tercatat
+On.baTempat = baKetik('baTempat', v => v.trim());
+On.baTtdIsi = baKetik('baTtdIsi', v => v.trim());
+On.baRuangIsi = baKetik('baRuangIsi', v => v.trim());
+On.baJmlIsi = baKetik('baJmlIsi', v => v.replace(/\D/g, ''));
 Act.baTgl = t => { Ck.baTgl = t.dataset.v; ckSimpan(); rerender(); };
 Act.baThn = t => { Ck.baThn = t.dataset.v; ckSimpan(); rerender(); };
 On.baThnIsi = debounce(t => { const v = t.value.replace(/\D/g, '').slice(0, 4); Ck.baThnIsi = v; if (!v || v.length === 4) { ckSimpan(); ckPreview(); } }, 300);
