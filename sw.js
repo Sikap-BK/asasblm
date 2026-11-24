@@ -5,7 +5,7 @@
    • Update berversi       → naikkan VERSION (pakai scripts/bump_version.py)
    Letakkan file ini di ROOT aplikasi (satu folder dengan index.html).
    ========================================================================== */
-const VERSION = 'asas-v1.1.8';            // ← NAIKKAN setiap kali file frontend berubah
+const VERSION = 'asas-v1.2.0';            // ← NAIKKAN setiap kali file frontend berubah
 const SPA = true;                        // true = 1 halaman (routing #), false = banyak halaman .html
 const OFFLINE_PAGE = 'offline.html';     // cadangan bila halaman belum pernah di-cache
 
@@ -22,6 +22,7 @@ const SHELL = [
   'js/pages.js',
   'js/design.js',
   'js/cetak.js',
+  'js/tuntas.js',
   'js/demo.js',
   'icons/icon-192.png',
   'icons/icon-512.png',

@@ -75,6 +75,7 @@ const ICONS = {
   eyeOff: '<path d="M10.73 5.08a10.74 10.74 0 0 1 11.2 6.57 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-1.44 2.49M14.08 14.16a3 3 0 0 1-4.24-4.24M17.48 17.5a10.75 10.75 0 0 1-15.42-5.15 1 1 0 0 1 0-.7 10.75 10.75 0 0 1 4.45-5.14M2 2l20 20"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>',
+  clip: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 14l2 2 4-4"/>',
   grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
   layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>'
 };
@@ -314,7 +315,7 @@ function logout() {
 
 // ---------- kerangka & router ----------
 const NAV = [['dashboard', 'Dashboard', 'grid'], ['siswa', 'Data Siswa', 'users'], ['ruang', 'Ruang & No Ujian', 'building'], ['sesi', 'Jadwal Sesi', 'calendar'],
-  ['kop', 'Kop Surat', 'file'], ['kartu', 'Desain Kartu', 'card'], ['cetak', 'Cetak Dokumen', 'printer'], ['laporan', 'Laporan Tabel', 'table'], ['tampilan', 'Pengaturan Tampilan', 'sliders']];
+  ['kop', 'Kop Surat', 'file'], ['kartu', 'Desain Kartu', 'card'], ['cetak', 'Cetak Dokumen', 'printer'], ['tuntas', 'Kartu Ketuntasan', 'clip'], ['laporan', 'Laporan Tabel', 'table'], ['tampilan', 'Pengaturan Tampilan', 'sliders']];
 const Pages = {}, Act = {}, On = {};
 
 function paintShell() {
